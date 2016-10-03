@@ -265,6 +265,7 @@ static size_t write_response_cb(void* contents, size_t size, size_t nmemb, void 
 // http post request
 //
 char *post_request(const char *url, const char *payload, const char *auth_header, request_rec *r, curl_pool *curl_pool) {
+	ERROR(r->server,"PX DEBUG: Entering post_request");
     CURL *curl = curl_pool_get(curl_pool);
     struct response_t response;
     struct curl_slist *headers = NULL;
@@ -298,6 +299,7 @@ char *post_request(const char *url, const char *payload, const char *auth_header
     }
     curl_pool_put(curl_pool, curl);
     free(response.data);
+	ERROR(r->server,"PX DEBUG: Leaving post_request");
     return NULL;
 }
 
@@ -307,6 +309,7 @@ char *post_request(const char *url, const char *payload, const char *auth_header
 //
 
 char *create_activity(const char *activity_type, const px_config *conf, const request_context *ctx) {
+    ERROR(ctx->r->server, "PX DEBUG: Entering create_activity");
     json_t *details = json_pack("{s:i, s:s, s:s, s:s, s:s}",
             "block_score", ctx->score,
             "block_reason", BLOCK_REASON_STR[ctx->block_reason],
@@ -344,6 +347,7 @@ char *create_activity(const char *activity_type, const px_config *conf, const re
     char *request_str = json_dumps(activity, JSON_COMPACT);
 
     json_decref(activity);
+    ERROR(ctx->r->server, "PX DEBUG: ACTIVITY OBJECT request_str: %s", request_str);
     return request_str;
 }
 
@@ -363,6 +367,7 @@ json_t *headers_to_json_helper(const apr_array_header_t *arr) {
 }
 
 char *create_risk_payload(const request_context *ctx, const px_config *conf, bool cookie_expired) {
+	ERROR(ctx->r->server, "PX DEBUG: Entering create_risk_payload function");
     // headers array
     const apr_array_header_t *header_arr = apr_table_elts(ctx->headers);
     json_t *j_headers = headers_to_json_helper(header_arr);
@@ -373,7 +378,11 @@ char *create_risk_payload(const request_context *ctx, const px_config *conf, boo
             "uri", ctx->uri,
             "url", ctx->full_url,
             "headers", j_headers);
-    json_decref(j_headers);
+
+	ERROR(ctx->r->server, "PX DEBUG: j_request value : %s", json_dumps(j_request,JSON_COMPACT));
+
+    // release j_headers after last reference 
+	json_decref(j_headers);
 
     // additional object
     json_t *j_additional = json_pack("{s:s, s:s, s:s, s:s}",
@@ -384,6 +393,8 @@ char *create_risk_payload(const request_context *ctx, const px_config *conf, boo
     if (ctx->px_cookie) {
         json_object_set_new(j_additional, "px_cookie", json_string(ctx->px_cookie));
     }
+	ERROR(ctx->r->server, "PX DEBUG: j_additional value : %s", json_dumps(j_additional,JSON_COMPACT));
+
 
     // risk api object
     json_t *j_risk = json_pack("{s:O,s:O}",
@@ -391,17 +402,21 @@ char *create_risk_payload(const request_context *ctx, const px_config *conf, boo
             "additional", j_additional);
     json_decref(j_request);
     json_decref(j_additional);
+	ERROR(ctx->r->server, "PX DEBUG: j_risk value : %s", json_dumps(j_risk,JSON_COMPACT));
 
     if (ctx->vid) {
         json_object_set_new(j_risk, "vid", json_string(ctx->vid));
     }
+	ERROR(ctx->r->server, "PX DEBUG: j_risk value with vid : %s", json_dumps(j_risk,JSON_COMPACT));
     if (cookie_expired && ctx->uuid) {
         json_object_set_new(j_risk, "uuid", json_string(ctx->uuid));
     }
+	ERROR(ctx->r->server, "PX DEBUG: j_risk value with uuid : %s", json_dumps(j_risk,JSON_COMPACT));
 
     // dump as string
     char *request_str = json_dumps(j_risk, JSON_COMPACT);
     json_decref(j_risk);
+    ERROR(ctx->r->server, "PX DEBUG: RISK OBJECT request_str: %s", request_str);
     return request_str;
 }
 
@@ -853,13 +868,16 @@ request_context* create_context(request_rec *r, const px_config *conf) {
 }
 
 risk_response* risk_api_get(const request_context *ctx, const px_config *conf, bool expired) {
+	ERROR(ctx->r->server, "PX DEBUG: Entering risk_api_get");
     char *risk_payload = create_risk_payload(ctx, conf, expired);
-    if (!risk_payload) {
+    if (!risk_payload) {  
+		ERROR(ctx->r->server, "PX DEBUG: risk payload is NULL");
         return NULL;
     }
     char *risk_response_str = post_request(RISK_API_URL , risk_payload, conf->auth_header, ctx->r, conf->curl_pool);
     free(risk_payload);
     if (!risk_response_str) {
+		ERROR(ctx->r->server, "PX DEBUG: risk response string is NULL");
         return NULL;
     }
 
