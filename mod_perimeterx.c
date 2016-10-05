@@ -26,8 +26,7 @@
 #include "http_log.h"
 #include "apr_strings.h"
 #include "apr_escape.h"
-
-#include "curl_pool.h"
+#include "apr_reslist.h"
 
 #if AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4
 #include "util_cookies.h"
@@ -66,6 +65,7 @@ static const char *EXPECT = "Expect:";
 static const int ITERATIONS_UPPER_BOUND = 10000;
 static const int ITERATIONS_LOWER_BOUND = 0;
 static const int TEMP_REDIRECT = 307;
+static const int DEFAULT_CURL_POOL_SIZE = 40;
 
 static const char *BLOCKING_PAGE_FMT = "<html lang=\"en\">\n\
             <head>\n\
@@ -125,6 +125,7 @@ static const char *CAPTCHA_BLOCKING_PAGE_FMT  = "<html lang=\"en\">\n \
 
 
 static const char *ERROR_CONFIG_MISSING = "mod_perimeterx: config structure not allocated";
+static const char *ERROR_CONFIG_INVALID_CURL_POOL_SIZE = "mod_perimeterx: config invalid curl pool size";
 
 // px configuration
 
@@ -144,8 +145,7 @@ typedef struct px_config_t {
     long api_timeout;
     bool send_page_activities;
     const char *module_version;
-    curl_pool *curl_pool;
-    int curl_pool_size;
+    apr_reslist_t *curlpool;
     apr_array_header_t *routes_whitelist;
     apr_array_header_t *useragents_whitelist;
     apr_array_header_t *custom_file_ext_whitelist;
@@ -270,10 +270,45 @@ static size_t write_response_cb(void* contents, size_t size, size_t nmemb, void 
     return realsize;
 }
 
+// curl pool
+//
+
+static apr_status_t curl_pool_construct(void **handle, void *params, apr_pool_t *pool) {
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        return APR_EGENERAL;
+    }
+    *handle = curl;
+    return APR_SUCCESS;
+}
+
+static apr_status_t curl_pool_destruct(void *handle, void *params, apr_pool_t *pool) {
+    curl_easy_cleanup((CURL *)handle);
+    return APR_SUCCESS;
+}
+
+static apr_reslist_t *setup_curl_pool(int pool_size, apr_pool_t *pool) {
+    const int nmin = pool_size;
+    const int nkeep = pool_size;
+    const int nmax = pool_size;
+    const int exptime = 0;
+    apr_reslist_t *curlpool;
+    if (apr_reslist_create(&curlpool, nmin, nkeep, nmax, exptime, curl_pool_construct, curl_pool_destruct, NULL, pool) != APR_SUCCESS) {
+        return NULL;
+    }
+    apr_pool_cleanup_register(pool, curlpool, (void*)apr_reslist_destroy, apr_pool_cleanup_null);
+    return curlpool;
+}
+
 // http post request
 //
-char *post_request(const char *url, const char *payload, const char *auth_header, request_rec *r, curl_pool *curl_pool) {
-    CURL *curl = curl_pool_get(curl_pool);
+char *post_request(const char *url, const char *payload, const char *auth_header, request_rec *r, apr_reslist_t *curlpool) {
+    CURL *curl;
+    if (apr_reslist_acquire(curlpool, &curl) != APR_SUCCESS) {
+        ERROR(r->server, "post_request: failed to acquire curl from pool");
+        return NULL;
+    }
+
     struct response_t response;
     struct curl_slist *headers = NULL;
     long status_code;
@@ -284,7 +319,7 @@ char *post_request(const char *url, const char *payload, const char *auth_header
     response.server = r->server;
 
     headers = curl_slist_append(headers, auth_header);
-    headers = curl_slist_append(headers, JSON_CONTENT_TYPE);
+    eaders = curl_slist_append(headers, JSON_CONTENT_TYPE);
     headers = curl_slist_append(headers, EXPECT);
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -297,15 +332,17 @@ char *post_request(const char *url, const char *payload, const char *auth_header
     if (res == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
         if (status_code == 200) {
-            curl_pool_put(curl_pool, curl);
+            url_easy_reset(curl);
+            apr_reslist_release(curlpool, curl);
             return response.data;
         }
         ERROR(r->server, "post_request: status: %ld, url: %s", status_code, url);
     } else {
         ERROR(r->server, "post_request: failed: %s", curl_easy_strerror(res));
     }
-    curl_pool_put(curl_pool, curl);
     free(response.data);
+    curl_easy_reset(curl);
+    apr_reslist_release(curlpool, curl);
     return NULL;
 }
 
@@ -742,7 +779,7 @@ bool verify_captcha(request_context *ctx, px_config *conf) {
         return true;
     }
 
-    char *response_str = post_request(conf->captcha_api_url, payload, conf->auth_header, ctx->r, conf->curl_pool);
+    char *response_str = post_request(conf->captcha_api_url, payload, conf->auth_header, ctx->r, conf->curlpool);
     free(payload);
     if (!response_str) {
         INFO(ctx->r->server, "verify_captcha: failed to perform captcha validation request. url: (%s)", ctx->full_url);
@@ -887,7 +924,7 @@ risk_response* risk_api_get(const request_context *ctx, const px_config *conf, b
     if (!risk_payload) {
         return NULL;
     }
-    char *risk_response_str = post_request(conf->risk_api_url , risk_payload, conf->auth_header, ctx->r, conf->curl_pool);
+    char *risk_response_str = post_request(conf->risk_api_url , risk_payload, conf->auth_header, ctx->r, conf->curlpool);
     free(risk_payload);
     if (!risk_response_str) {
         return NULL;
@@ -927,7 +964,7 @@ static void post_verification(request_context *ctx, px_config *conf, bool reques
             ERROR(ctx->r->server, "post_verification: (%s) create activity failed", activity_type);
             return;
         }
-        char *resp = post_request(conf->activities_api_url, activity, conf->auth_header, ctx->r, conf->curl_pool);
+        char *resp = post_request(conf->activities_api_url, activity, conf->auth_header, ctx->r, conf->curlpool);
         free(activity);
         if (resp) {
             free(resp);
@@ -1213,11 +1250,11 @@ static const char *set_curl_pool_size(cmd_parms *cmd, void *config, const char *
     if (!conf) {
         return ERROR_CONFIG_MISSING;
     }
-    conf->curl_pool_size = atoi(curl_pool_size);
-    if (conf->curl_pool != NULL) {
-        curl_pool_destroy(conf->curl_pool);
+    int pool_size = atoi(curl_pool_size);
+    if (pool_size <= 0) {
+        return ERROR_CONFIG_INVALID_CURL_POOL_SIZE;
     }
-    conf->curl_pool = curl_pool_create(cmd->pool, conf->curl_pool_size);
+    conf->curlpool = setup_curl_pool(pool_size, cmd->pool);
     return NULL;
 }
 
@@ -1282,10 +1319,6 @@ static int px_hook_post_request(request_rec *r) {
     return px_handle_request(r, conf);
 }
 
-apr_status_t kill_curl_pool(void *data) {
-    curl_pool_destroy((curl_pool*)data);
-}
-
 static void *create_config(apr_pool_t *p) {
     px_config *conf = apr_pcalloc(p, sizeof(px_config));
     if (conf) {
@@ -1295,7 +1328,6 @@ static void *create_config(apr_pool_t *p) {
         conf->blocking_score = 70;
         conf->captcha_enabled = false;
         conf->module_version = "Apache Module v1.0.5";
-        conf->curl_pool_size = 40;
         conf->base_url = DEFAULT_BASE_URL;
         conf->risk_api_url = apr_pstrcat(p, conf->base_url, RISK_API, NULL);
         conf->captcha_api_url = apr_pstrcat(p, conf->base_url, CAPTCHA_API, NULL);
@@ -1303,10 +1335,9 @@ static void *create_config(apr_pool_t *p) {
         conf->routes_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->useragents_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->custom_file_ext_whitelist = NULL;
-        conf->curl_pool = curl_pool_create(p, conf->curl_pool_size);
+        conf->curlpool = setup_curl_pool(DEFAULT_CURL_POOL_SIZE, p);
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
-        /*apr_pool_cleanup_register(p, conf->curl_pool, kill_curl_pool, apr_pool_cleanup_null);*/
     }
     return conf;
 }
