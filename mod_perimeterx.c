@@ -1282,7 +1282,7 @@ static int px_hook_post_request(request_rec *r) {
     return px_handle_request(r, conf);
 }
 
-apr_status_t kill_curl_pool(void *data) {
+static apr_status_t kill_curl_pool(void *data) {
     curl_pool_destroy((curl_pool*)data);
 }
 
@@ -1306,7 +1306,7 @@ static void *create_config(apr_pool_t *p) {
         conf->curl_pool = curl_pool_create(p, conf->curl_pool_size);
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
-        /*apr_pool_cleanup_register(p, conf->curl_pool, kill_curl_pool, apr_pool_cleanup_null);*/
+        apr_pool_cleanup_register(p, conf->curl_pool, kill_curl_pool, apr_pool_cleanup_null);
     }
     return conf;
 }

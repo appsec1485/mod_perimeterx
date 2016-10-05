@@ -2,31 +2,35 @@
 
 curl_pool *curl_pool_create(apr_pool_t *p, int size) {
     curl_pool *pool = (curl_pool *)apr_pcalloc(p, sizeof(curl_pool));
-    apr_thread_mutex_create(&pool->mutex, APR_THREAD_MUTEX_NESTED, p);
-    apr_thread_cond_create(&pool->cond, p);
-    pool->size = size;
-    pool->used = 0;
-    pool->data = (CURL **)apr_pcalloc(p, sizeof(CURL*) * size);
-    for (int i = 0; i < pool->size; ++i) {
-        pool->data[i] = curl_easy_init();
+    if (pool) {
+        apr_thread_mutex_create(&pool->mutex, APR_THREAD_MUTEX_NESTED, p);
+        apr_thread_cond_create(&pool->cond, p);
+        pool->size = size;
+        pool->used = 0;
+        pool->data = (CURL **)apr_pcalloc(p, sizeof(CURL*) * size);
+        for (int i = 0; i < pool->size; ++i) {
+            pool->data[i] = curl_easy_init();
+        }
     }
     return pool;
 }
 
 void curl_pool_destroy(curl_pool *pool) {
-    for (int i = 0; i < pool->size; ++i) {
-        if (pool->data[i]) {
-            curl_easy_cleanup(pool->data[i]);
-            pool->data[i] = NULL;
+    if (pool) {
+        for (int i = 0; i < pool->size; ++i) {
+            if (pool->data[i]) {
+                curl_easy_cleanup(pool->data[i]);
+                pool->data[i] = NULL;
+            }
         }
+        pool->size = 0;
+        pool->used = 0;
+        pool->data = NULL;
+        apr_thread_mutex_destroy(pool->mutex);
+        pool->mutex = NULL;
+        apr_thread_cond_destroy(pool->cond);
+        pool->cond = NULL;
     }
-    pool->size = 0;
-    pool->used = 0;
-    pool->data = NULL;
-    apr_thread_mutex_destroy(pool->mutex);
-    pool->mutex = NULL;
-    apr_thread_cond_destroy(pool->cond);
-    pool->cond = NULL;
 }
 
 CURL *curl_pool_get(curl_pool *pool) {
@@ -88,6 +92,7 @@ CURL *curl_pool_get_timedwait(curl_pool *pool, apr_interval_time_t timeout) {
 }
 
 int curl_pool_put(curl_pool *pool, CURL *curl) {
+    curl_easy_reset(curl);
     apr_thread_mutex_lock(pool->mutex);
     if (pool->used > 0) {
         // find free spot
