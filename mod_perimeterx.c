@@ -287,6 +287,11 @@ static apr_status_t curl_pool_destruct(void *handle, void *params, apr_pool_t *p
     return APR_SUCCESS;
 }
 
+void apr_reslist_destroy_trace(apr_reslist_t *res) {
+    fprintf(stderr, "[DEBUG] RESLIST DESTROY 0x%p\n", res);
+    apr_reslist_destroy(res);
+}
+
 static apr_reslist_t *setup_curl_pool(int pool_size, apr_pool_t *pool) {
     const int nmin = pool_size;
     const int nkeep = pool_size;
@@ -296,7 +301,7 @@ static apr_reslist_t *setup_curl_pool(int pool_size, apr_pool_t *pool) {
     if (apr_reslist_create(&curlpool, nmin, nkeep, nmax, exptime, curl_pool_construct, curl_pool_destruct, NULL, pool) != APR_SUCCESS) {
         return NULL;
     }
-    apr_pool_cleanup_register(pool, curlpool, (void*)apr_reslist_destroy, apr_pool_cleanup_null);
+    apr_pool_cleanup_register(pool, curlpool, (void*)apr_reslist_destroy_trace, apr_pool_cleanup_null);
     return curlpool;
 }
 
@@ -308,6 +313,7 @@ char *post_request(const char *url, const char *payload, const char *auth_header
         ERROR(r->server, "post_request: failed to acquire curl from pool");
         return NULL;
     }
+    /*curl_easy_reset(curl);*/
 
     struct response_t response;
     struct curl_slist *headers = NULL;
@@ -319,7 +325,7 @@ char *post_request(const char *url, const char *payload, const char *auth_header
     response.server = r->server;
 
     headers = curl_slist_append(headers, auth_header);
-    eaders = curl_slist_append(headers, JSON_CONTENT_TYPE);
+    headers = curl_slist_append(headers, JSON_CONTENT_TYPE);
     headers = curl_slist_append(headers, EXPECT);
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -332,7 +338,6 @@ char *post_request(const char *url, const char *payload, const char *auth_header
     if (res == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
         if (status_code == 200) {
-            url_easy_reset(curl);
             apr_reslist_release(curlpool, curl);
             return response.data;
         }
@@ -341,7 +346,6 @@ char *post_request(const char *url, const char *payload, const char *auth_header
         ERROR(r->server, "post_request: failed: %s", curl_easy_strerror(res));
     }
     free(response.data);
-    curl_easy_reset(curl);
     apr_reslist_release(curlpool, curl);
     return NULL;
 }
