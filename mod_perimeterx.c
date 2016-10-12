@@ -250,6 +250,8 @@ typedef struct request_context_t {
     request_rec *r;
 } request_context;
 
+// ip_filter_t stores the configuration for IPRangeWhitelist
+//
 typedef struct ip_filter_t {
     struct in_addr *net;
     uint8_t bits;
@@ -263,6 +265,9 @@ struct response_t {
     server_rec *server;
 };
 
+
+// checks if ipv4 is in net range
+//
 static bool cidr_match(const struct in_addr *addr, const struct in_addr *net, uint8_t bits) {
   if (bits == 0) {
     return true;
@@ -1072,6 +1077,7 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
         }
     }
 
+    // checks if request ip is filtered using IPRangeWhitelist
     const apr_array_header_t *ip_filters = conf->ip_filters;
     for (int i = 0; i < ip_filters->nelts; i++) {
         const ip_filter *ipf = APR_ARRAY_IDX(ip_filters, i, const ip_filter*);
@@ -1352,7 +1358,7 @@ static const char *add_ip_range_to_whitelist(cmd_parms *cmd, void *config, const
     apr_cpystrn(ipcpy, ip, strlen(ip) + 1);
     char *last = apr_palloc(cmd->pool, sizeof(char) * strlen(ip) + 1);
     const char *netstr = apr_strtok(ipcpy, "/", &last);
-    // there is on / in the configuration
+    // there is no / in the configuration
     if (strlen(netstr) == strlen(ip)) {
         return ERROR_BAD_IPRANGE_CONF;
     }
