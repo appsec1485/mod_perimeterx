@@ -151,6 +151,7 @@ typedef struct px_config_t {
     apr_array_header_t *custom_file_ext_whitelist;
     apr_array_header_t *ip_header_keys;
     apr_array_header_t *sensitive_routes;
+    apr_array_header_t *ip_whitelist;
 } px_config;
 
 typedef enum {
@@ -248,6 +249,10 @@ typedef struct request_context_t {
     request_rec *r;
 } request_context;
 
+typedef struct ip_filter_t {
+    in_addr *net;
+    in_addr *netmask;
+};
 
 // response_t helper buffer for response data
 //
@@ -256,6 +261,39 @@ struct response_t {
     size_t size;
     server_rec *server;
 };
+
+bool cidr_match(const ip_filter *ip_filter, uint8_t bits) {
+  if (bits == 0) {
+    // C99 6.5.7 (3): u32 << 32 is undefined behaviour
+    return true;
+  }
+  return !((addr.s_addr ^ net.s_addr) & htonl(0xFFFFFFFFu << (32 - bits)));
+}
+
+bool cidr6_match(const in6_addr &address, const in6_addr &network, uint8_t bits) {
+/*#ifdef LINUX*/
+  const uint32_t *a = address.s6_addr32;
+  const uint32_t *n = network.s6_addr32;
+/*#else*/
+  /*const uint32_t *a = address.__u6_addr.__u6_addr32;*/
+  /*const uint32_t *n = network.__u6_addr.__u6_addr32;*/
+/*#endif*/
+  int bits_whole, bits_incomplete;
+  bits_whole = bits >> 5;         // number of whole u32
+  bits_incomplete = bits & 0x1F;  // number of bits in incomplete u32
+  if (bits_whole) {
+    if (memcmp(a, n, bits_whole << 2)) {
+      return false;
+    }
+  }
+  if (bits_incomplete) {
+    uint32_t mask = htonl((0xFFFFFFFFu) << (32 - bits_incomplete));
+    if ((a[bits_whole] ^ n[bits_whole]) & mask) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // post request response callback
 //
@@ -799,6 +837,7 @@ const char *get_request_ip(const request_rec *r, const px_config *conf) {
             in_addr_t addr;
             if (inet_pton(AF_INET, first_ip, &addr) == 1 || inet_pton(AF_INET6, first_ip, &addr) == 1) {
                 return first_ip;
+                // todo: might also get the parsed ip instead of double parsing
             }
         }
     }
@@ -845,7 +884,7 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     }
 #endif
 
-    ctx->ip = get_request_ip(r, conf);
+    ctx->ip = apr_table_get(r->subprocess_env, "real_ip");
     if (!ctx->ip) {
         ERROR(r->server, "Request IP is NULL");
     }
@@ -1021,6 +1060,11 @@ handle_response:
     return request_valid;
 }
 
+// TODO: parse ip and create a field of ip before and  send it insteach of char*
+static bool is_cidr_match(const char *ip, const ip_filter *ip_filter) {
+    return cidr_match(ip, ip_filter->net, ip_filter->mask) || cidr6_match(ip, ip_filter->net, ip_filter->mask);;
+}
+
 static bool px_should_verify_request(request_rec *r, px_config *conf) {
     if (!conf->module_enabled) {
         return false;
@@ -1051,6 +1095,15 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
         }
     }
 
+    const apr_array_header_t *ips = conf->ip_whitelist;
+    for (int i = 0; i < ips->nelts; i++) {
+        const ip_filter *ip = APR_ARRAY_IDX(ips, i, const ip_filter);
+        const char *extracted_ip = apr_table_get(r->subprocess_env, "real_ip");
+        if (is_cidr_match(r->ip, ip)) // which ip will that be
+            return false;
+        }    
+    }
+
     // checks if request is filtered using PXWhitelistRoutes
     const apr_array_header_t *routes = conf->routes_whitelist;
     for (int i = 0; i < routes->nelts; i++) {
@@ -1076,6 +1129,8 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
 }
 
 int px_handle_request(request_rec *r, px_config *conf) {
+    const char *request_ip = get_request_ip(r, conf);
+    apr_table_add(r->subprocess_env, "real_ip", request_ip);
     if (!px_should_verify_request(r, conf)) {
         return OK;
     }
@@ -1309,6 +1364,28 @@ static const char *add_sensitive_route(cmd_parms *cmd, void *config, const char 
     return NULL;
 }
 
+static const char *add_ip_to_whitelist(cmd_parms *cmd, void *config, const char *ip) {
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    in_addr *net = apr_palloc(cmd->p, sizeof(in_addr));
+    in_addr *netmask = apr_palloc(cmd->p, sizeof(in_addr));
+    const char *split = strchr(ip, '/');
+    if (!split) {
+        return "Invalid format for IPWhitelist"; // todo: add the ip that was not added
+    }
+    char* dest = apr_palloc(cmd->p, sizeof(char) * 32); // TODO:change buffer
+    int ip_netmask =  apr_strcpy(dest, src); // get src
+    int ip_net = ; 
+    inet_cidrtoaddr(ip_net, &net);
+    /*apr_palloc()*/
+    const char** entry = apr_array_push(conf->ip_whitelist);
+    *entry = ip_config;
+
+    return NULL;
+}
+
 static int px_hook_post_request(request_rec *r) {
     px_config *conf = ap_get_module_config(r->server->module_config, &perimeterx_module);
     return px_handle_request(r, conf);
@@ -1339,6 +1416,7 @@ static void *create_config(apr_pool_t *p) {
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
         conf->sensitive_routes = apr_array_make(p, 0, sizeof(char*));
+        conf->ip_whitelist = apr_array_make(p, 0, sizeof(in_addr*));
     }
     return conf;
 }
@@ -1424,6 +1502,11 @@ static const command_rec px_directives[] = {
             NULL,
             OR_ALL,
             "Sensitive routes - for each of this uris the module will do a server-to-server call even if a good cookie is on the request"),
+    AP_INIT_ITERATE("IPWhitelist",
+            add_ip_to_whitelist,
+            NULL,
+            OR_ALL,
+            "TBD"),
     { NULL }
 };
 
