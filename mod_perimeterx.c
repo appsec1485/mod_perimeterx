@@ -250,9 +250,9 @@ typedef struct request_context_t {
 } request_context;
 
 typedef struct ip_filter_t {
-    in_addr *net;
-    in_addr *netmask;
-};
+    struct in_addr *net;
+    uint8_t bits;
+} ip_filter;
 
 // response_t helper buffer for response data
 //
@@ -262,15 +262,15 @@ struct response_t {
     server_rec *server;
 };
 
-bool cidr_match(const ip_filter *ip_filter, uint8_t bits) {
+bool cidr_match(const struct in_addr *addr, const struct in_addr *net, uint8_t bits) {
   if (bits == 0) {
     // C99 6.5.7 (3): u32 << 32 is undefined behaviour
     return true;
   }
-  return !((addr.s_addr ^ net.s_addr) & htonl(0xFFFFFFFFu << (32 - bits)));
+  return !((addr->s_addr ^ net->s_addr) & htonl(0xFFFFFFFFu << (32 - bits)));
 }
 
-bool cidr6_match(const in6_addr &address, const in6_addr &network, uint8_t bits) {
+bool cidr6_match(const in6_addr *address, const in6_addr *network, uint8_t bits) {
 /*#ifdef LINUX*/
   const uint32_t *a = address.s6_addr32;
   const uint32_t *n = network.s6_addr32;
@@ -1060,9 +1060,10 @@ handle_response:
     return request_valid;
 }
 
-// TODO: parse ip and create a field of ip before and  send it insteach of char*
-static bool is_cidr_match(const char *ip, const ip_filter *ip_filter) {
-    return cidr_match(ip, ip_filter->net, ip_filter->mask) || cidr6_match(ip, ip_filter->net, ip_filter->mask);;
+static bool is_cidr_match(const char *ip, const ip_filter *ip_filter, apr_pool_t pool) {
+    struct in_addr *ip_addr = apr_palloc(pool, sizeof(in_addr));
+    inet_aton(ip, &ip);
+    return cidr_match(ip_addr, ip_filter->net, ip_filter->mask) || cidr6_match(ip_addr, ip_filter->net, ip_filter->mask);;
 }
 
 static bool px_should_verify_request(request_rec *r, px_config *conf) {
@@ -1099,7 +1100,7 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
     for (int i = 0; i < ips->nelts; i++) {
         const ip_filter *ip = APR_ARRAY_IDX(ips, i, const ip_filter);
         const char *extracted_ip = apr_table_get(r->subprocess_env, "real_ip");
-        if (is_cidr_match(r->ip, ip)) // which ip will that be
+        if (is_cidr_match(extracted_ip, ip, r->pool)) // which ip will that be
             return false;
         }    
     }
@@ -1369,19 +1370,28 @@ static const char *add_ip_to_whitelist(cmd_parms *cmd, void *config, const char 
     if (!conf) {
         return ERROR_CONFIG_MISSING;
     }
-    in_addr *net = apr_palloc(cmd->p, sizeof(in_addr));
-    in_addr *netmask = apr_palloc(cmd->p, sizeof(in_addr));
-    const char *split = strchr(ip, '/');
-    if (!split) {
-        return "Invalid format for IPWhitelist"; // todo: add the ip that was not added
-    }
-    char* dest = apr_palloc(cmd->p, sizeof(char) * 32); // TODO:change buffer
-    int ip_netmask =  apr_strcpy(dest, src); // get src
-    /*int ip_net = ; */
-    inet_cidrtoaddr(ip_net, &net);
-    /*apr_palloc()*/
+    struct in_addr *net = apr_palloc(cmd->p, sizeof(in_addr));
+    int bits;
+    const ip_cpy = apr_palloc(cmd->pool, sizeof(char) * strlen(ip));
+    apr_cpystrn(ip_cpy, ip, strlen(ip));
+    char *last = apr_palloc(cmd->pool, sizeof(char) * strlen(ip));
+    const char *net = apr_pstrtok(ip_cpy, "/", &last);
+    print("net: %s", net);
+    const char *bits_str = apr_pstrtok(NULL, "", &last);
+    printf("bits: %s", bits_str);
+    bits = atoi(bits_str);
+    printf("bits: %d", bits);
+    inet_aton(ip, &net);
+    ip_filter *ip_filter = apr_palloc(cmd->pool, sizeof(ip_filter));
+    ip_filter->net = net;
+    ip_filter->bits = bits;
+    // TODO: check for invalid configuration
+    /*if (!split) {*/
+        /*return "Invalid format for IPWhitelist"; // todo: add the ip that was not added*/
+    /*}*/
     const char** entry = apr_array_push(conf->ip_filters);
     *entry = ip_filter;
+    /**entry = *ip_filter;*/
 
     return NULL;
 }
