@@ -5,7 +5,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <arpa/inet.h>
-#include <inttypes.h>
 
 #include <jansson.h>
 
@@ -126,6 +125,7 @@ static const char *CAPTCHA_BLOCKING_PAGE_FMT  = "<html lang=\"en\">\n \
 
 
 static const char *ERROR_CONFIG_MISSING = "mod_perimeterx: config structure not allocated";
+static const char *ERROR_BAD_IPRANGE_CONF = "mod_perimeterx:  IPRangeWhitelist must be in the form of hostaddres/netmask, for example - 192.168.0.0/24";
 
 // px configuration
 
@@ -268,31 +268,6 @@ static bool cidr_match(const struct in_addr *addr, const struct in_addr *net, ui
     return true;
   }
   return !((addr->s_addr ^ net->s_addr) & htonl(0xFFFFFFFFu << (32 - bits)));
-}
-
-bool cidr6_match(const struct in6_addr *address, const struct in6_addr *network, uint8_t bits) {
-/*#ifdef LINUX*/
-  const uint32_t *a = address->s6_addr32;
-  const uint32_t *n = network->s6_addr32;
-/*#else*/
-  /*const uint32_t *a = address.__u6_addr.__u6_addr32;*/
-  /*const uint32_t *n = network.__u6_addr.__u6_addr32;*/
-/*#endif*/
-  int bits_whole, bits_incomplete;
-  bits_whole = bits >> 5;         // number of whole u32
-  bits_incomplete = bits & 0x1F;  // number of bits in incomplete u32
-  if (bits_whole) {
-    if (memcmp(a, n, bits_whole << 2)) {
-      return false;
-    }
-  }
-  if (bits_incomplete) {
-    uint32_t mask = htonl((0xFFFFFFFFu) << (32 - bits_incomplete));
-    if ((a[bits_whole] ^ n[bits_whole]) & mask) {
-      return false;
-    }
-  }
-  return true;
 }
 
 // post request response callback
@@ -837,7 +812,6 @@ const char *get_request_ip(const request_rec *r, const px_config *conf) {
             in_addr_t addr;
             if (inet_pton(AF_INET, first_ip, &addr) == 1 || inet_pton(AF_INET6, first_ip, &addr) == 1) {
                 return first_ip;
-                // todo: might also get the parsed ip instead of double parsing
             }
         }
     }
@@ -1065,7 +1039,7 @@ static bool is_cidr_match(const char *ip, const ip_filter *ipf, apr_pool_t *pool
     if (inet_pton(AF_INET, ip, ip_addr) == 1) { // valid ip v4 address
         return cidr_match(ip_addr, ipf->net, ipf->bits);
     }
-    return false; /*|| cidr6_match(ip_addr, ip_filter->net, ip_filter->bits);*/
+    return false;
 }
 
 static bool px_should_verify_request(request_rec *r, px_config *conf) {
@@ -1372,17 +1346,20 @@ static const char *add_ip_range_to_whitelist(cmd_parms *cmd, void *config, const
     if (!conf) {
         return ERROR_CONFIG_MISSING;
     }
+
     ip_filter *ipf = apr_palloc(cmd->pool, sizeof(ip_filter));
     char *ipcpy = apr_palloc(cmd->pool, sizeof(char) * strlen(ip) + 1);
     apr_cpystrn(ipcpy, ip, strlen(ip) + 1);
     char *last = apr_palloc(cmd->pool, sizeof(char) * strlen(ip) + 1);
     const char *netstr = apr_strtok(ipcpy, "/", &last);
+    // there is on / in the configuration
+    if (strlen(netstr) == strlen(ip)) {
+        return ERROR_BAD_IPRANGE_CONF;
+    }
     const char *bitsstr = apr_strtok(NULL, "/", &last);
-    struct in_addr *net = apr_palloc(cmd->pool, sizeof(struct in_addr));
-    int status = inet_aton(netstr, net);
-    int bits = atoi(bitsstr);
-    ipf->bits = bits;
-    ipf->net = net;
+    ipf->net = apr_palloc(cmd->pool, sizeof(struct in_addr));
+    int status = inet_aton(netstr, ipf->net);
+    ipf->bits = atoi(bitsstr);
     const void **entry = apr_array_push(conf->ip_filters);
     *entry = ipf;
 
