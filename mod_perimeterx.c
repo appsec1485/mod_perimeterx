@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <arpa/inet.h>
+#include <inttypes.h>
 
 #include <jansson.h>
 
@@ -1083,6 +1084,8 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
         const ip_filter *ipf = APR_ARRAY_IDX(ip_filters, i, const ip_filter*);
         const char *extracted_ip = apr_table_get(r->subprocess_env, "real_ip");
         if (is_cidr_match(extracted_ip, ipf, r->pool, r->server)) {
+            const char *netstr = inet_ntoa(*ipf->net);
+            INFO(r->server, "request is whitelisted due to ip: >>%s<< in range of: >> %s/%"PRIu8" <<", extracted_ip, netstr, ipf->bits);
             return false;
         }
     }
