@@ -151,7 +151,7 @@ typedef struct px_config_t {
     apr_array_header_t *custom_file_ext_whitelist;
     apr_array_header_t *ip_header_keys;
     apr_array_header_t *sensitive_routes;
-    apr_array_header_t *ip_whitelist;
+    apr_array_header_t *ip_filters;
 } px_config;
 
 typedef enum {
@@ -1095,7 +1095,7 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
         }
     }
 
-    const apr_array_header_t *ips = conf->ip_whitelist;
+    const apr_array_header_t *ip_filters = conf->ip_filters;
     for (int i = 0; i < ips->nelts; i++) {
         const ip_filter *ip = APR_ARRAY_IDX(ips, i, const ip_filter);
         const char *extracted_ip = apr_table_get(r->subprocess_env, "real_ip");
@@ -1377,11 +1377,11 @@ static const char *add_ip_to_whitelist(cmd_parms *cmd, void *config, const char 
     }
     char* dest = apr_palloc(cmd->p, sizeof(char) * 32); // TODO:change buffer
     int ip_netmask =  apr_strcpy(dest, src); // get src
-    int ip_net = ; 
+    /*int ip_net = ; */
     inet_cidrtoaddr(ip_net, &net);
     /*apr_palloc()*/
-    const char** entry = apr_array_push(conf->ip_whitelist);
-    *entry = ip_config;
+    const char** entry = apr_array_push(conf->ip_filters);
+    *entry = ip_filter;
 
     return NULL;
 }
@@ -1416,7 +1416,7 @@ static void *create_config(apr_pool_t *p) {
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
         conf->sensitive_routes = apr_array_make(p, 0, sizeof(char*));
-        conf->ip_whitelist = apr_array_make(p, 0, sizeof(in_addr*));
+        conf->ipf_filters = apr_array_make(p, 0, sizeof(ip_config*));
     }
     return conf;
 }
