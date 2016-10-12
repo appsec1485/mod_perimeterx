@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <arpa/inet.h>
+#include <inttypes.h>
 
 #include <jansson.h>
 
@@ -270,10 +271,10 @@ bool cidr_match(const struct in_addr *addr, const struct in_addr *net, uint8_t b
   return !((addr->s_addr ^ net->s_addr) & htonl(0xFFFFFFFFu << (32 - bits)));
 }
 
-bool cidr6_match(const in6_addr *address, const in6_addr *network, uint8_t bits) {
+bool cidr6_match(const struct in6_addr *address, const struct in6_addr *network, uint8_t bits) {
 /*#ifdef LINUX*/
-  const uint32_t *a = address.s6_addr32;
-  const uint32_t *n = network.s6_addr32;
+  const uint32_t *a = address->s6_addr32;
+  const uint32_t *n = network->s6_addr32;
 /*#else*/
   /*const uint32_t *a = address.__u6_addr.__u6_addr32;*/
   /*const uint32_t *n = network.__u6_addr.__u6_addr32;*/
@@ -1060,13 +1061,14 @@ handle_response:
     return request_valid;
 }
 
-static bool is_cidr_match(const char *ip, const ip_filter *ip_filter, apr_pool_t pool) {
-    struct in_addr *ip_addr = apr_palloc(pool, sizeof(in_addr));
-    inet_aton(ip, &ip);
-    return cidr_match(ip_addr, ip_filter->net, ip_filter->mask) || cidr6_match(ip_addr, ip_filter->net, ip_filter->mask);;
+static bool is_cidr_match(const char *ip, const ip_filter *ip_filter, apr_pool_t *pool) {
+    struct in_addr *ip_addr = apr_palloc(pool, sizeof(struct in_addr));
+    return cidr_match(ip_addr, ip_filter->net, ip_filter->bits);
+        /*|| cidr6_match(ip_addr, ip_filter->net, ip_filter->bits);;*/
 }
 
 static bool px_should_verify_request(request_rec *r, px_config *conf) {
+    ERROR(r->server, "Going to check if we need to verify the requets");
     if (!conf->module_enabled) {
         return false;
     }
@@ -1097,12 +1099,12 @@ static bool px_should_verify_request(request_rec *r, px_config *conf) {
     }
 
     const apr_array_header_t *ip_filters = conf->ip_filters;
-    for (int i = 0; i < ips->nelts; i++) {
-        const ip_filter *ip = APR_ARRAY_IDX(ips, i, const ip_filter);
+    for (int i = 0; i < ip_filters->nelts; i++) {
+        const ip_filter *ip = APR_ARRAY_IDX(ip_filters, i, const ip_filter*);
         const char *extracted_ip = apr_table_get(r->subprocess_env, "real_ip");
-        if (is_cidr_match(extracted_ip, ip, r->pool)) // which ip will that be
+        if (is_cidr_match(extracted_ip, ip, r->pool)) { // which ip will that be
             return false;
-        }    
+        }
     }
 
     // checks if request is filtered using PXWhitelistRoutes
@@ -1365,23 +1367,26 @@ static const char *add_sensitive_route(cmd_parms *cmd, void *config, const char 
     return NULL;
 }
 
+// todo: change to range
 static const char *add_ip_to_whitelist(cmd_parms *cmd, void *config, const char *ip) {
+    printf("Initial IP: %s", ip);
     px_config *conf = get_config(cmd, config);
     if (!conf) {
         return ERROR_CONFIG_MISSING;
     }
-    struct in_addr *net = apr_palloc(cmd->p, sizeof(in_addr));
+    struct in_addr *net = apr_palloc(cmd->pool, sizeof(struct in_addr));
     int bits;
-    const ip_cpy = apr_palloc(cmd->pool, sizeof(char) * strlen(ip));
-    apr_cpystrn(ip_cpy, ip, strlen(ip));
-    char *last = apr_palloc(cmd->pool, sizeof(char) * strlen(ip));
-    const char *net = apr_pstrtok(ip_cpy, "/", &last);
-    print("net: %s", net);
-    const char *bits_str = apr_pstrtok(NULL, "", &last);
-    printf("bits: %s", bits_str);
-    bits = atoi(bits_str);
-    printf("bits: %d", bits);
-    inet_aton(ip, &net);
+    char *ipcpy = apr_palloc(cmd->pool, sizeof(char) * strlen(ip) + 1);
+    apr_cpystrn(ipcpy, ip, strlen(ip) + 1);
+    /*printf("ip cpy: %s", ipcpy);*/
+    char *last = apr_palloc(cmd->pool, sizeof(char) * strlen(ip) + 1);
+    const char *netstr = apr_strtok(ipcpy, "/", &last);
+    /*printf("net: %s\n", netstr);*/
+    const char *bitsstr = apr_strtok(NULL, "/", &last);
+    /*printf("bits: %s\n", bitsstr);*/
+    bits = atoi(bitsstr);
+    /*printf("bits: %d\n", bits);*/
+    inet_aton(ip, net);
     ip_filter *ip_filter = apr_palloc(cmd->pool, sizeof(ip_filter));
     ip_filter->net = net;
     ip_filter->bits = bits;
@@ -1389,8 +1394,11 @@ static const char *add_ip_to_whitelist(cmd_parms *cmd, void *config, const char 
     /*if (!split) {*/
         /*return "Invalid format for IPWhitelist"; // todo: add the ip that was not added*/
     /*}*/
-    const char** entry = apr_array_push(conf->ip_filters);
+    /*const ip_filter **entry = apr_array_push(conf->ip_filters);*/
+    const void **entry = apr_array_push(conf->ip_filters);
+    printf("ip filter we are putting : %x\n", ip_filter);
     *entry = ip_filter;
+    printf("ip filter debug: %"PRIu8"\n", ip_filter->bits);
     /**entry = *ip_filter;*/
 
     return NULL;
@@ -1426,7 +1434,7 @@ static void *create_config(apr_pool_t *p) {
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
         conf->sensitive_routes = apr_array_make(p, 0, sizeof(char*));
-        conf->ipf_filters = apr_array_make(p, 0, sizeof(ip_config*));
+        conf->ip_filters = apr_array_make(p, 0, sizeof(ip_filter*));
     }
     return conf;
 }
@@ -1512,7 +1520,7 @@ static const command_rec px_directives[] = {
             NULL,
             OR_ALL,
             "Sensitive routes - for each of this uris the module will do a server-to-server call even if a good cookie is on the request"),
-    AP_INIT_ITERATE("IPWhitelist",
+    AP_INIT_ITERATE("IPRangeWhitelist",
             add_ip_to_whitelist,
             NULL,
             OR_ALL,
