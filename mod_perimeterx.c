@@ -1365,7 +1365,7 @@ static const char *add_ip_range_to_whitelist(cmd_parms *cmd, void *config, const
     if (strlen(netstr) == strlen(ip)) {
         return ERROR_BAD_IPRANGE_CONF;
     }
-    const char *bitsstr = apr_strtok(NULL, "/", &last);
+    const char *bitsstr = apr_strtok(NULL, "", &last);
     ipf->net = apr_palloc(cmd->pool, sizeof(struct in_addr));
     int status = inet_aton(netstr, ipf->net);
     ipf->bits = atoi(bitsstr);
@@ -1405,7 +1405,7 @@ static void *create_config(apr_pool_t *p) {
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
         conf->sensitive_routes = apr_array_make(p, 0, sizeof(char*));
-        conf->ip_filters = apr_array_make(p, 0, sizeof(ip_filter));
+        conf->ip_filters = apr_array_make(p, 0, sizeof(ip_filter*));
     }
     return conf;
 }
