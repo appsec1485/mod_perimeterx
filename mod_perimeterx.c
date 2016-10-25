@@ -311,13 +311,11 @@ char *post_request(const char *url, const char *payload, const char *auth_header
             return response.data;
         }
         ERROR(r->server, "post_request: status: %ld, url: %s", status_code, url);
-    }
-    else {
+    } else {
         size_t len = strlen(errbuf);
         if (len) {
             ERROR(r->server, "post_request failed: %s", errbuf);
-        }
-        else {
+        } else {
             ERROR(r->server, "post_request failed: %s", curl_easy_strerror(res));
         }
     }
@@ -772,7 +770,6 @@ bool verify_captcha(request_context *ctx, px_config *conf) {
         if (c->status == 0) {
             captcha_verified = true;
         } else {
-            // TODO(barak): do we want to change ctx here?
             ctx->vid = NULL;
         }
         INFO(ctx->r->server, "verify_captcha: cookie validation status (%d)", captcha_verified);
@@ -870,7 +867,6 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     ctx->hostname = r->hostname;
     ctx->http_method = r->method;
     ctx->useragent = apr_table_get(r->headers_in, "User-Agent");
-    // TODO(barak): fill_url is missing the protocol like http:// or https://
     ctx->full_url = apr_pstrcat(r->pool, r->hostname, r->unparsed_uri, NULL);
     ctx->vid = NULL;
 

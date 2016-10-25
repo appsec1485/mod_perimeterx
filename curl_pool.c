@@ -47,23 +47,20 @@ CURL *curl_pool_get(curl_pool *pool) {
 
 CURL *curl_pool_get_wait(curl_pool *pool) {
     apr_thread_mutex_lock(pool->mutex);
-    CURL *c = NULL;
-    bool found = false;
-    while (!found) {
+    CURL *c;
+    while (1) {
         if (pool->used < pool->size) {
-            for (int i = 0; i < pool->size && c == NULL; ++i) {
+            c = NULL;
+            for (int i = 0; i < pool->size; ++i) {
                 c = pool->data[i];
-                if  (c) {
+                if (c) {
                     pool->data[i] = NULL;
                     pool->used += 1;
-                    found = true;
                     break;
                 }
             }
         }
-        if (!found) {
-            apr_thread_cond_wait(pool->cond, pool->mutex);
-        }
+        apr_thread_cond_wait(pool->cond, pool->mutex);
     }
     apr_thread_mutex_unlock(pool->mutex);
     return c;
