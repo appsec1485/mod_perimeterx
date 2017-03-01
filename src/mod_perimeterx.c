@@ -45,7 +45,7 @@ APLOG_USE_MODULE(perimeterx);
 #define ERROR(server_rec, ...) \
     ap_log_error(APLOG_MARK, APLOG_ERR, 0, server_rec, "[mod_perimeterx]:" __VA_ARGS__)
 
-static const char *DEFAULT_BASE_URL = "https://sapi-%s.glb1.perimeterx.net";
+static const char *DEFAULT_BASE_URL = "https://sapi-%s.perimeterx.net";
 static const char *RISK_API = "/api/v1/risk";
 static const char *CAPTCHA_API = "/api/v1/risk/captcha";
 static const char *ACTIVITIES_API = "/api/v1/collector/s2s";
@@ -54,6 +54,8 @@ static const char *ACTIVITIES_API = "/api/v1/collector/s2s";
 //
 static const char *BLOCKED_ACTIVITY_TYPE = "block";
 static const char *PAGE_REQUESTED_ACTIVITY_TYPE = "page_requested";
+static const char *CAPTCHA_COOKIE = "_pxCaptcha";
+static const char *PX_COOKIE = "_px";
 
 static const char* FILE_EXT_WHITELIST[] = {
     ".css", ".bmp", ".tif", ".ttf", ".docx", ".woff2", ".js", ".pict", ".tiff", ".eot", ".xlsx", ".jpg", ".csv",
@@ -76,7 +78,7 @@ static const char *BLOCKING_PAGE_FMT = "<html lang=\"en\">\n\
             <style> p { width: 60%%; margin: 0 auto; font-size: 35px; } body { background-color: #a2a2a2; font-family: \"Open Sans\"; margin: 5%%; } img { width: 180px; } a { color: #2020B1; text-decoration: blink; } a:hover { color: #2b60c6; } </style>\n\
             </head>\n\
             <body cz-shortcut-listen=\"true\">\n\
-            <div><img src=\"http://storage.googleapis.com/instapage-thumbnails/035ca0ab/e94de863/1460594818-1523851-467x110-perimeterx.png\"> </div>\n \
+            <div><img src=\"https://s.perimeterx.net/logo.png\"> </div>\n \
             <span style=\"color: white; font-size: 34px;\">Access to This Page Has Been Blocked</span> \n\
             <div style=\"font-size: 24px;color: #000042;\">\n\
             <br> Access to this page is blocked according to the site security policy.<br> Your browsing behaviour fingerprinting made us think you may be a bot. <br> <br> This may happen as a result of the following: \n\
@@ -99,17 +101,18 @@ static const char *CAPTCHA_BLOCKING_PAGE_FMT  = "<html lang=\"en\">\n \
                                                  <script src=\"https://www.google.com/recaptcha/api.js\"></script> \
                                                  <script> \
                                                  window.px_vid = '%s';\n \
+                                                 window.px_uuid = '%s';\n \
                                                  function handleCaptcha(response) { \n \
                                                      var name = '_pxCaptcha';\n \
                                                          var expiryUtc = new Date(Date.now() + 1000 * 10).toUTCString();\n \
-                                                         var cookieParts = [name, '=', response + ':' + window.px_vid, '; expires=', expiryUtc, '; path=/'];\n \
+                                                         var cookieParts = [name, '=', response + ':' + window.px_vid + ':' + window.px_uuid, '; expires=', expiryUtc, '; path=/'];\n \
                                                          document.cookie = cookieParts.join('');\n \
                                                          location.reload();\n \
                                                  }\n \
                                                  </script> \n \
                                                  </head>\n \
                                                  <body cz-shortcut-listen=\"true\">\n \
-                                                 <div><img src=\"http://storage.googleapis.com/instapage-thumbnails/035ca0ab/e94de863/1460594818-1523851-467x110-perimeterx.png\"> </div>\n \
+                                                 <div><img src=\"https://s.perimeterx.net/logo.png\"> </div>\n \
                                                  <span style=\"color: white; font-size: 34px;\">Access to This Page Has Been Blocked</span> \n \
                                                  <div style=\"font-size: 24px;color: #000042;\">\n \
                                                  <br> Access to this page is blocked according to the site security policy.<br> Your browsing behaviour fingerprinting made us think you may be a bot. <br> <br> This may happen as a result of the following: \n \
@@ -246,6 +249,7 @@ typedef struct request_context_t {
     const char *full_url;
     const char *http_method;
     const char *http_version;
+    const char *px_cookie_orig;
     int score;
     block_reason_t block_reason;
     s2s_call_reason_t call_reason;
@@ -421,6 +425,9 @@ char *create_risk_payload(const request_context *ctx, const px_config *conf) {
     if (ctx->px_cookie) {
         json_object_set_new(j_additional, "px_cookie", json_string(ctx->px_cookie_decrypted));
     }
+    if (ctx->px_cookie_orig) {
+        json_object_set_new(j_additional, "px_cookie_orig", json_string(ctx->px_cookie_orig));
+    }
 
     // risk api object
     json_t *j_risk = json_pack("{s:O,s:O}",
@@ -481,7 +488,7 @@ captcha_response *parse_captcha_response(const char* captcha_response_str, const
     json_error_t j_error;
     json_t *j_response = json_loads(captcha_response_str, 0, &j_error);
     if (!j_response) {
-        ERROR(ctx->r->server, "parse_captcha_response: failed to parse. error (%s), reponse (%s)",
+        ERROR(ctx->r->server, "parse_captcha_response: failed to parse. error (%s), response (%s)",
                 j_error.text, captcha_response_str);
         return NULL;
     }
@@ -490,12 +497,12 @@ captcha_response *parse_captcha_response(const char* captcha_response_str, const
     const char *uuid = NULL;
     const char *vid = NULL;
     const char *cid = NULL;
-    if (json_unpack(j_response, "{s:i,s:s,s:s,s?s}",
+    if (json_unpack(j_response, "{s:i,s?s,s?s,s?s}",
                 "status", &status,
                 "uuid", &uuid,
                 "cid", &cid,
                 "vid", &vid)) {
-        ERROR(ctx->r->server, "parse_captcha_response: failed to unpack. reponse (%s)", captcha_response_str);
+        ERROR(ctx->r->server, "parse_captcha_response: failed to unpack. response (%s)", captcha_response_str);
         json_decref(j_response);
         return NULL;
     }
@@ -683,14 +690,27 @@ risk_cookie *decode_cookie(const char *px_cookie, const char *cookie_key, reques
     char* saveptr;
     const char* delimieter = ":";
     const char* encoded_salt = strtok_r(px_cookie_cpy, delimieter, &saveptr);
-    int iterations = atoi(strtok_r(NULL, delimieter, &saveptr));
-    const char* encoded_payload = strtok_r(NULL, delimieter, &saveptr);
-
-    // make sure iteratins is valid and not too big
-    if (iterations < ITERATIONS_LOWER_BOUND || iterations > ITERATIONS_UPPER_BOUND) {
-        ERROR(r_ctx->r->server,"Stoping cookie decryption: Number of iterations is illegal - %d", iterations);
+    if (encoded_salt == NULL) {
+        INFO(r_ctx->r->server, "Stoping cookie decryption: no valid salt in cookie");
         return NULL;
     }
+    const char* iterations_str = strtok_r(NULL, delimieter, &saveptr);
+    if (iterations_str == NULL) {
+        INFO(r_ctx->r->server, "Stoping cookie decryption: no valid iterations in cookie");
+        return NULL;
+    }
+    apr_int64_t iterations = apr_atoi64(iterations_str);
+    // make sure iteratins is valid and not too big
+    if (iterations < ITERATIONS_LOWER_BOUND || iterations > ITERATIONS_UPPER_BOUND) {
+        ERROR(r_ctx->r->server,"Number of iterations is illegal - %"APR_INT64_T_FMT , iterations);
+        return NULL;
+    }
+    const char* encoded_payload = strtok_r(NULL, delimieter, &saveptr);
+    if (encoded_payload == NULL) {
+        INFO(r_ctx->r->server,"Stoping cookie decryption: no valid encoded_payload in cookie");
+        return NULL;
+    }
+
 
     // decode payload
     unsigned char *payload;
@@ -758,7 +778,7 @@ int rprintf_blocking_page(request_rec *r, const request_context *ctx) {
 
 int rprintf_captcha_blocking_page(request_rec *r, const request_context *ctx) {
     const char *vid = ctx->vid ? ctx->vid : "";
-    return ap_rprintf(r, CAPTCHA_BLOCKING_PAGE_FMT, vid, ctx->uuid);
+    return ap_rprintf(r, CAPTCHA_BLOCKING_PAGE_FMT, vid, ctx->uuid, ctx->uuid);
 }
 
 bool verify_captcha(request_context *ctx, px_config *conf) {
@@ -768,7 +788,14 @@ bool verify_captcha(request_context *ctx, px_config *conf) {
         return captcha_verified;
     }
 
+    // preventing reuse of captcha cookie by deleting it
+    apr_status_t res = ap_cookie_remove2(ctx->r, CAPTCHA_COOKIE, NULL, ctx->r->headers_out, ctx->r->err_headers_out, NULL);
+    if (res != APR_SUCCESS) {
+        ERROR(ctx->r->server, "could not remove _pxCatpcha from request");
+    }
+
     char *payload = create_captcha_payload(ctx, conf);
+    INFO(ctx->r->server, "verify_captcha: request - (%s)", payload);
     if (!payload) {
         INFO(ctx->r->server, "verify_captcha: failed to format captcha payload. url: (%s)", ctx->full_url);
         return true;
@@ -778,9 +805,10 @@ bool verify_captcha(request_context *ctx, px_config *conf) {
     free(payload);
     if (!response_str) {
         INFO(ctx->r->server, "verify_captcha: failed to perform captcha validation request. url: (%s)", ctx->full_url);
-        return true;
+        return false; // in case we are getting non 200 response
     }
 
+    INFO(ctx->r->server, "verify_captcha: server response (%s)", response_str);
     captcha_response *c = parse_captcha_response(response_str, ctx);
     free(response_str);
     if (c) {
@@ -855,8 +883,8 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     const char *px_captcha_cookie = NULL;
     char *captcha_cookie = NULL;
 # if AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4
-    apr_status_t status = ap_cookie_read(r, "_px", &px_cookie, 0);
-    status = ap_cookie_read(r, "_pxCaptcha", &px_captcha_cookie, 0);
+    apr_status_t status = ap_cookie_read(r, PX_COOKIE, &px_cookie, 0);
+    status = ap_cookie_read(r, CAPTCHA_COOKIE, &px_captcha_cookie, 0);
     if (status == APR_SUCCESS) {
         captcha_cookie = apr_pstrdup(r->pool, px_captcha_cookie);
     }
@@ -875,10 +903,10 @@ request_context* create_context(request_rec *r, const px_config *conf) {
             if (*cookie == ' ') {
                 cookie ++;
             }
-            if (strncmp(cookie, "_pxCaptcha", 10) == 0) {
+            if (strncmp(cookie, CAPTCHA_COOKIE, 10) == 0) {
                 apr_pstrdup(r->pool, apr_strtok(cookie, "=", &val_ctx));
                 captcha_cookie = apr_pstrdup(r->pool, apr_strtok(NULL, "", &val_ctx));
-            } else if (strncmp(cookie, "_px", 3) == 0) {
+            } else if (strncmp(cookie, PX_COOKIE, 3) == 0) {
                 apr_strtok(cookie, "=", &val_ctx);
                 px_cookie = apr_pstrdup(r->pool, apr_strtok(NULL, "", &val_ctx));
             }
@@ -901,6 +929,7 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     // TODO(barak): fill_url is missing the protocol like http:// or https://
     ctx->full_url = apr_pstrcat(r->pool, r->hostname, r->unparsed_uri, NULL);
     ctx->vid = NULL;
+    ctx->px_cookie_orig = NULL;
 
     if (captcha_cookie) {
         char *saveptr;
@@ -1006,12 +1035,22 @@ static bool is_sensitive_route_prefix(request_rec *r, px_config *conf) {
 
 static bool px_verify_request(request_context *ctx, px_config *conf) {
     bool request_valid = true;
+
     risk_response *risk_response;
 
     if (conf->captcha_enabled && ctx->px_captcha) {
         if (verify_captcha(ctx, conf)) {
+            // clean users cookie on captcha verification
+            apr_status_t res = ap_cookie_remove2(ctx->r, PX_COOKIE, NULL, ctx->r->headers_out, ctx->r->err_headers_out, NULL);
+            if (res != APR_SUCCESS) {
+                ERROR(ctx->r->server, "could not remove _px from request");
+            }
             post_verification(ctx, conf, true);
             return request_valid;
+        } else {
+            INFO(ctx->r->server, "Failed to verify px captcha, creating risk_api call");
+            risk_response = risk_api_get(ctx, conf);
+            goto handle_response;
         }
     }
 
@@ -1026,6 +1065,7 @@ static bool px_verify_request(request_context *ctx, px_config *conf) {
             ctx->uuid = c->uuid;
             vr = validate_cookie(c, ctx, conf->cookie_key);
         } else {
+            ctx->px_cookie_orig = ctx->px_cookie;
             vr = DECRYPTION_FAILED;
         }
     }
@@ -1402,7 +1442,7 @@ static void *create_config(apr_pool_t *p) {
         conf->send_page_activities = false;
         conf->blocking_score = 70;
         conf->captcha_enabled = false;
-        conf->module_version = "Apache Module v1.0.10";
+        conf->module_version = "Apache Module v1.0.11-RC";
         conf->curl_pool_size = 40;
         conf->routes_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->useragents_whitelist = apr_array_make(p, 0, sizeof(char*));
@@ -1532,4 +1572,3 @@ module AP_MODULE_DECLARE_DATA perimeterx_module =  {
     px_directives,              /* command apr_table_t */
     perimeterx_register_hooks   /* register hooks */
 };
-
