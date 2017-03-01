@@ -18,7 +18,8 @@ Apache::TestMM::generate_script('t/TEST');
 WriteMakefile(
     #NAME => 'Apache::Test_mod_perimeterx',
     #NAME => 'Apache::TestModPerimeterX',
-    VERSION_FROM => 'lib/Apache/ModPerimeterX.pm',
+    #VERSION_FROM => 'lib/Apache/ModPerimeterX.pm',
+    VERSION => '0.0.1',
     PREREQ_PM => \%require,
     clean => {
         FILES => "@{ clean_files() }",

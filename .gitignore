@@ -7,3 +7,4 @@ unknown
 **/*.o
 perimeterx.conf.values
 t/TEST
+Makefile
