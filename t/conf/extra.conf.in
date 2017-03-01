@@ -1,1 +1,6 @@
 # where to find mod_perimeterx and configuration
+
+LogLevel debug
+<IfModule mod_perimeterx.c>
+
+</IfModule>
