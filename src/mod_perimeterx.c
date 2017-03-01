@@ -1350,9 +1350,6 @@ static const char *add_file_extension_whitelist(cmd_parms *cmd, void *config, co
     if (!conf) {
         return ERROR_CONFIG_MISSING;
     }
-    if (!conf->custom_file_ext_whitelist) {
-        conf->custom_file_ext_whitelist = apr_array_make(cmd->pool, 0, sizeof(char*));
-    }
     const char** entry = apr_array_push(conf->custom_file_ext_whitelist);
     *entry = file_extension;
     return NULL;
@@ -1409,10 +1406,11 @@ static void *create_config(apr_pool_t *p) {
         conf->curl_pool_size = 40;
         conf->routes_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->useragents_whitelist = apr_array_make(p, 0, sizeof(char*));
-        conf->custom_file_ext_whitelist = NULL;
+        conf->custom_file_ext_whitelist = apr_array_make(p, 0, sizeof(char*));;
         conf->curl_pool = curl_pool_create(p, conf->curl_pool_size);
         conf->ip_header_keys = apr_array_make(p, 0, sizeof(char*));
         conf->block_page_url = NULL;
+        conf->auth_header = "";
         conf->sensitive_routes = apr_array_make(p, 0, sizeof(char*));
         conf->enabled_hostnames = apr_array_make(p, 0, sizeof(char*));
         conf->sensitive_routes_prefix = apr_array_make(p, 0, sizeof(char*));
