@@ -1,0 +1,74 @@
+# Source files. mod_perimeterx.c must be the first file.
+
+SRC= \
+	src/mod_perimeterx.c \
+	src/b.c \
+	src/curl_pool.c
+
+CFLAGS=@OPENSSL_CFLAGS@ @CURL_CFLAGS@ @JANSSON_CFLAGS@
+LIBS=@OPENSSL_LIBS@ @CURL_LIBS@ @JANSSON_LIBS@
+
+HDRS = \
+  src/curl_pool.h
+
+# # Files to include when making a .tar.gz-file for distribution
+# DISTaFILES=$(SRC) \
+# 	$(HDRS) \
+# 	test/test.c \
+# 	test/test-cmd.c \
+# 	test/stub.c \
+# 	configure \
+# 	configure.ac \
+# 	Makefile.in \
+# 	autogen.sh \
+# 	INSTALL \
+# 	README.md \
+# 	AUTHORS \
+# 	DISCLAIMER \
+# 	auth_openidc.conf \
+# 	LICENSE.txt \
+# 	ChangeLog
+
+all: src/mod_perimeterx.la
+
+src/mod_perimeterx.la: $(SRC) $(HDRS)
+	@APXS2@ @APXS2_OPTS@ -Wc,"-DNAMEVER=\"@NAMEVER@\" $(CFLAGS)" -Wl,"$(LIBS)" -Wc,-Wall -Wc,-g -c $(SRC)
+
+configure:	configure.ac
+	./autogen.sh
+
+# @NAMEVER@.tar.gz:	 $(DISTFILES)
+# 	tar -c --transform="s#^#@NAMEVER@/#" -vzf $@ $(DISTFILES)
+
+# test/test test/test-cmd: test/test.c test/stub.c src/mod_auth_openidc.la
+# 	@APXS2@ @APXS2_OPTS@ $(CFLAGS) -Wl,"$(LIBS)" -Isrc -Wc,-Wall -Wc,-g -c -o $@ $@.c test/stub.c $(SRC:.c=.lo) @APR_LIBS@
+
+# test-compile: test/test test/test-cmd
+
+# test: test-compile
+# 	test/test
+
+.PHONY:	install
+install: src/mod_perimeterx.la
+	@APXS2@ @APXS2_OPTS@ -i -n mod_perimeterx src/mod_perimeterx.la
+
+# .PHONY: distfile
+# distfile:	@NAMEVER@.tar.gz
+
+.PHONY:	clean
+clean:
+	rm -f src/mod_perimeterx.la
+	rm -f src/*.lo src/cache/*.lo test/*.lo
+	rm -rf src/.libs/ src/cache/.libs/ test/.libs
+	rm -rf test/test test/test-cmd
+
+# .PHONY:	distclean
+# distclean:	clean
+# 	rm -f Makefile config.log config.status @NAMEVER@.tar.gz *~ \
+# 	build-stamp config.guess config.sub
+# 	rm -rf debian/mod-auth_openidc
+# 	rm -f debian/files
+
+.PHONY: fullclean
+fullclean:	distclean
+	rm -f configure aclocal.m4

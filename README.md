@@ -21,6 +21,7 @@ Table of Contents
 
 <a name="dependencies"></a> Dependencies
 ----------------------------------------
+- [GNU Autotools] https://www.gnu.org/software/autoconf/autoconf.html
 - [openssl 1.0.1] (https://www.openssl.org/source/) 
 - [libcurl >= 7.19.0] (https://curl.haxx.se/docs/install.html) 
 - [jansson 2.6](http://www.digip.org/jansson/)
@@ -30,6 +31,7 @@ You can install dependencies using the Linux package manager (```yum``` / ```deb
 
 #### Ubuntu users:
 ```shell
+$ sudo apt-get install make automake autoconf libtool 
 $ sudo apt-get install libjansson-dev
 $ sudo apt-get install libcurl4-openssl-dev
 $ sudo apt-get install apache2-dev 
@@ -40,7 +42,9 @@ $ sudo apt-get install apache2-dev
 ```shell
 $ git clone https://github.com/PerimeterX/mod_perimeterx.git
 $ cd mod_perimeterx
-$ sudo make
+$ ./autogen.sh && ./configure
+$ make
+$ sudo make install
 $ apache2ctl restart
 ```
 

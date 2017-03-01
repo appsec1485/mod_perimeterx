@@ -4,6 +4,11 @@ MAINTAINER aviad@perimeterx.com
 
 RUN apt-get update
 RUN apt-get install -y \
+        make \
+        automake \
+        autoconf \
+        libtool \
+        pkg-config \
         apache2 \
         apache2-dev \
         wget \
@@ -29,5 +34,5 @@ RUN wget http://apache.mivzakim.net/perl/mod_perl-2.0.10.tar.gz && \
 #&& a2enmod perl
 
 WORKDIR tmp
-RUN git clone https://github.com/PerimeterX/mod_perimeterx.git
-RUN cd mod_perimeterx/src && make
+COPY . /tmp/mod_perimeterx
+RUN cd mod_perimeterx && ./autogen.sh && ./configure && make && make install

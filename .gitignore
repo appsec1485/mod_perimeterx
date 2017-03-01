@@ -8,3 +8,12 @@ unknown
 perimeterx.conf.values
 t/TEST
 Makefile
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+aclocal.m4
+config.log
+config.status
+configure
+err.xml
