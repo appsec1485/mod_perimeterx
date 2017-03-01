@@ -18,13 +18,14 @@ Apache::TestMM::generate_script('t/TEST');
 
 WriteMakefile(
     NAME => 'Apache::Test_mod_perimeterx',
-    VERSION_FROM => './t/lib/Test/ModPerimeterX.pm',
+    #VERSION_FROM => 'lib/Test/ModPerimeterX.pm',
     PREREQ_PM => \%require,
     clean => {
         FILES => "@{ clean_files() }",
     },
     ($] >= 5.005 ?
-        (ABSTRACT_FROM => './t/lib/Test/ModPerimeterX.pm',
+        (
+            #ABSTRACT_FROM => 'lib/Test/ModPerimeterX.pm',
             AUTHOR => 'Aviad Shikloshi <aviad (at) perimeterx.com>',
         ) : ()
     ),
