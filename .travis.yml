@@ -1,7 +1,20 @@
 sudo: required
 
-services:
-  - docker
+language: perl
+perl:
+  - '5.18'
+
+before_install:
+  # check what else we should install
+  - sudo apt-get install -y apache2-mpm-events apache2-utils
 
 script:
-  - docker build -t perimeterx/mod_perimeterx .
+  - perl Makefile.PL
+  - ./t/TEST -v
+
+after_failur:
+  - apache2ctl -M
+  - cat /t/logs/error_log
+
+notifications:
+  on_failure: always
