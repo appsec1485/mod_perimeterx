@@ -5,8 +5,20 @@ $Apache::TestModPerimeterX::Version = '0.1';
 use strict;
 use warnings;
 
-sub _bake_cookie {
-    my $self = shift;
+sub new {
+    #my $class = @_;
+    my $class = shift;
+    print "class: $class\n";
+    my $self = {};
+    bless $self, $class;
+    return $self;
+    #return bless \%args, $class;
+}
+
+sub bake_cookie {
+    my( $self ) = @_;
+
+    #my $self = shift;
 
     use Crypt::KeyDerivation 'pbkdf2';
     use Crypt::Misc 'encode_b64', 'decode_b64';
@@ -44,4 +56,12 @@ sub _bake_cookie {
     return 'Cookie: _px=' . $cookie;
 };
 
+my $c = Apache::TestModPerimeterX->new;
+print "c: $c\n";
+my $co= $c->bake_cookie("123", "PhantomJS", "abc", "vid", "mytime");
+print "cookie: $co\n";
+
+#print "cookie: $co\n";
+
 1;
+

@@ -7,9 +7,9 @@ use Apache::TestModPerimeterX;
 
 plan tests => 1;
 
-my $cookie_baker = Apache::TestModPerimeterX->new;
-my $cookie = $cookie_baker->cookie_baker;
-print "cookie: $cookie\n";
+#my $cookie_baker = Apache::TestModPerimeterX->new("ab");
+#my $cookie = $cookie_baker->cookie_baker;
+#print "cookie: $cookie\n";
 #print "what is this: $cookie_baker\n";
 
 #my $cookie = $test_utils->bake_cookie()
