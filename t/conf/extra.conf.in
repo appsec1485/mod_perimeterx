@@ -1,3 +1,5 @@
+# vi: set ft=apache
+#
 # where to find mod_perimeterx and configuration
 #ServerRoot "/etc/apache2"
 #ServerName "test-server"
@@ -24,7 +26,16 @@ LoadModule authz_user_module /usr/lib/apache2/modules/mod_authz_user.so
 LoadModule authz_host_module /usr/lib/apache2/modules/mod_authz_host.so
 LoadModule perimeterx_module /usr/lib/apache2/modules/mod_perimeterx.so
 
-
 <IfModule mod_perimeterx.c>
     PXEnabled on
+    AuthToken ${AUTH_TOKEN}
+    CookieKey ${CookieyKey}
+    AppId
+    BlockingScore 50
+    Captcha Off
+    IPHeader MyRealIP1 MyRealRealIP
+    SensitiveRoutes /sensitive_route
+    PXWhitelistRoutes /server-status
+    PXWhitelistUserAgents to-add-this
+    #EnableBlockingByHostname
 </IfModule>
