@@ -29,7 +29,7 @@ LoadModule perimeterx_module /usr/lib/apache2/modules/mod_perimeterx.so
 <IfModule mod_perimeterx.c>
     PXEnabled on
     AuthToken ${AUTH_TOKEN}
-    CookieKey ${CookieyKey}
+    CookieKey perimeterx
     AppId
     BlockingScore 50
     Captcha Off

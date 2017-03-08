@@ -7,9 +7,9 @@ use Apache::ModPerimeterXTestUtils;
 
 plan tests => 1;
 
-my $cookie = expired_cookie;
+my $time = ( time() + 360 ) * 1000;
+
+my $cookie = valid_good_cookie;
 
 my $res = GET '/index.html', 'real-ip' => '1.2.3.4', 'Cookie' => $cookie;
-print $res->header_out('X-PX-SCORE');
-
 ok $res->code == 200
