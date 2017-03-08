@@ -1173,7 +1173,6 @@ int px_handle_request(request_rec *r, px_config *conf) {
     if (ctx) {
         bool request_valid = px_verify_request(ctx, conf);
 #ifdef DEBUG
-        ERROR(r->server, "We are in the debug section");
         apr_table_set(r->headers_out, "X-PX-SCORE", apr_itoa(r->pool, ctx->score));
         apr_table_set(r->headers_out, "X-PX-EXTRACTED-IP", ctx->ip);
         apr_table_set(r->headers_out, "X-PX-BLOCK-REASON", BLOCK_REASON_STR[ctx->block_reason]);
