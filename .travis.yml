@@ -6,7 +6,7 @@ perl:
 
 before_install:
   # check what else we should install
-  - sudo apt-get install -y apache2-mpm-events apache2-utils
+  - sudo apt-get install -y apache2 apache2-dev
 
 script:
   - cd src/ && make debug
