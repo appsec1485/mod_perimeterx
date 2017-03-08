@@ -1172,8 +1172,13 @@ int px_handle_request(request_rec *r, px_config *conf) {
     request_context *ctx = create_context(r, conf);
     if (ctx) {
         bool request_valid = px_verify_request(ctx, conf);
-        apr_table_set(r->subprocess_env, "SCORE", apr_itoa(r->pool, ctx->score));
-
+#ifdef DEBUG
+        ERROR(r->server, "We are in the debug section");
+        apr_table_set(r->headers_out, "X-PX-SCORE", apr_itoa(r->pool, ctx->score));
+        apr_table_set(r->headers_out, "X-PX-EXTRACTED-IP", ctx->ip);
+        apr_table_set(r->headers_out, "X-PX-BLOCK-REASON", BLOCK_REASON_STR[ctx->block_reason]);
+        apr_table_set(r->headers_out, "X-PX-CALL-REASON", S2S_CALL_REASON_STR[ctx->call_reason]);
+#endif
         if (!request_valid && ctx->block_enabled) {
             if (strcmp(r->method, "POST") == 0) {
                 return HTTP_FORBIDDEN;

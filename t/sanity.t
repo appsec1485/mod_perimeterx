@@ -9,14 +9,7 @@ plan tests => 1;
 
 my $time = ( time() + 360 ) * 1000;
 
-my $cookie = bake_cookie(
-	"1.2.3.4",
-	"libwww-perl/0.00",
-	"20",
-	"57ecdc10-0e97-11e6-80b6-095df820282c",
-	"vid",
-	$time
-);
+my $cookie = valid_good_cookie;
 
-my $res = GET '/index.html', 'real-ip' => '1.2.3.4', 'Cookie' => $cookie; 
+my $res = GET '/index.html', 'real-ip' => '1.2.3.4', 'Cookie' => $cookie;
 ok $res->code == 200

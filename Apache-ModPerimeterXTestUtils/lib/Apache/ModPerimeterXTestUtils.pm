@@ -21,8 +21,11 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
+#bake_cookie
 our @EXPORT = qw(
-	bake_cookie
+    valid_good_cookie
+    valid_bad_cookie
+    expired_cookie
 );
 
 sub bake_cookie {
@@ -61,6 +64,43 @@ sub bake_cookie {
     my $cookie = encode_b64($salt) . ":" . 1000 . ":" . encode_b64($ciphertext);
     return '_px=' . $cookie;
 }
+
+sub valid_good_cookie {
+    my $time = ( time() + 360 ) * 1000;
+    return bake_cookie(
+        "1.2.3.4",
+        "libwww-perl/0.00",
+        "20",
+        "57ecdc10-0e97-11e6-80b6-095df820282c",
+        "vid",
+        $time
+    );
+}
+
+sub valid_bad_cookie {
+    my $time = ( time() + 360 ) * 1000;
+    return bake_cookie(
+        "1.2.3.4",
+        "libwww-perl/0.00",
+        "100",
+        "57ecdc10-0e97-11e6-80b6-095df820282c",
+        "vid",
+        $time
+    );
+}
+
+sub expired_cookie {
+    my $expierd_time = ( time() - 24*60*60);
+    return bake_cookie(
+        "1.2.3.4",
+        "libwww-perl/0.00",
+        "20",
+        "57ecdc10-0e97-11e6-80b6-095df820282c",
+        "vid",
+        $expierd_time
+    );
+}
+
 
 our $VERSION = '0.01';
 
