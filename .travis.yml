@@ -9,7 +9,9 @@ before_install:
   - sudo apt-get install -y apache2-mpm-events apache2-utils
 
 script:
-  - perl Makefile.PL
+  - cd src/ && make
+  - cd Apache-ModPerimeterXTestUtils/ && perl Makefile.pl && make && make install
+  - cd../ && perl Makefile.PL && make && make install
   - ./t/TEST -v
 
 after_failur:

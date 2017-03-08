@@ -7,7 +7,6 @@
 #include <arpa/inet.h>
 
 #include <jansson.h>
-
 #include <curl/curl.h>
 
 #include <openssl/conf.h>
