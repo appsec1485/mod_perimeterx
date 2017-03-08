@@ -36,6 +36,6 @@ LoadModule perimeterx_module /usr/lib/apache2/modules/mod_perimeterx.so
     IPHeader MyRealIP1 MyRealRealIP
     SensitiveRoutes /sensitive_route
     PXWhitelistRoutes /server-status
-    PXWhitelistUserAgents to-add-this
+    PXWhitelistUserAgents whitelisted-useragent
     #EnableBlockingByHostname
 </IfModule>
