@@ -8,11 +8,11 @@ before_install:
   - sudo apt-get install -y apache2 apache2-dev
 
 install:
-  - cpanm --installdeps -notest .
-
-script:
   - cd src/ && sudo make debug
   - cd ../Apache-ModPerimeterXTestUtils/ && perl Makefile.pl && make && sudo make install
+  - cpanm --installdeps --notest .
+
+script:
   - cd../ && perl Makefile.PL && make && make install
   - ./t/TEST -v
 
