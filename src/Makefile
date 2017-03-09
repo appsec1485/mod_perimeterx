@@ -1,16 +1,19 @@
 CC = apxs
-CFLAGS = -g
+CFLAGS = -i -a -Wc,-std=gnu99 -c 
+LDFLAGS = `pkg-config --cflags --libs jansson openssl libcurl` 
+DBG_CFLAGS = -g -DDEBUG 
+
+SOURCES = mod_perimeterx.c curl_pool.c
+HEADERS =  curl_pool.h
+
 
 all: clean mod
 
-mod: mod_perimeterx.c curl_pool.h curl_pool.c
-	$(CC) -i -a -Wc,-std=gnu99 -c `pkg-config --cflags --libs jansson openssl libcurl` mod_perimeterx.c curl_pool.c
+mod: $(HEADERS) $(SOURCES)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(SOURCES)
 
-b: b.c
-	gcc b.c -std=gnu99 -ljansson -ob
-
-debug:
-	$(CC) -i -a -Wc,-std=gnu99 -c -DDEBUG `pkg-config --cflags --libs jansson openssl libcurl` mod_perimeterx.c curl_pool.c
+debug: $(HEADERS) $(SOURCES);
+	$(CC) $(CFLAGS) $(DBG_CFLAGS) $(LDFLAGS) $(SOURCES)
 
 clean:
-	rm -f *.{lo,slo,la,o} b
+	rm -f *.{lo,slo,la,o}

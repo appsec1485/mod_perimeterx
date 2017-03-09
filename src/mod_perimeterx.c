@@ -55,6 +55,7 @@ static const char *BLOCKED_ACTIVITY_TYPE = "block";
 static const char *PAGE_REQUESTED_ACTIVITY_TYPE = "page_requested";
 static const char *CAPTCHA_COOKIE = "_pxCaptcha";
 static const char *PX_COOKIE = "_px";
+static const int   HTTP_OK = 200; 
 
 static const char* FILE_EXT_WHITELIST[] = {
     ".css", ".bmp", ".tif", ".ttf", ".docx", ".woff2", ".js", ".pict", ".tiff", ".eot", ".xlsx", ".jpg", ".csv",
@@ -315,7 +316,7 @@ char *post_request(const char *url, const char *payload, const char *auth_header
     curl_slist_free_all(headers);
     if (res == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
-        if (status_code == 200) {
+        if (status_code == HTTP_OK) {
             curl_pool_put(curl_pool, curl);
             return response.data;
         }
