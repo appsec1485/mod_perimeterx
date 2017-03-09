@@ -55,7 +55,6 @@ static const char *BLOCKED_ACTIVITY_TYPE = "block";
 static const char *PAGE_REQUESTED_ACTIVITY_TYPE = "page_requested";
 static const char *CAPTCHA_COOKIE = "_pxCaptcha";
 static const char *PX_COOKIE = "_px";
-static const int   HTTP_OK = 200; 
 
 static const char* FILE_EXT_WHITELIST[] = {
     ".css", ".bmp", ".tif", ".ttf", ".docx", ".woff2", ".js", ".pict", ".tiff", ".eot", ".xlsx", ".jpg", ".csv",

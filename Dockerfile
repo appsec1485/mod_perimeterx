@@ -29,5 +29,5 @@ RUN wget http://apache.mivzakim.net/perl/mod_perl-2.0.10.tar.gz && \
 #&& a2enmod perl
 
 WORKDIR tmp
-RUN git clone https://github.com/PerimeterX/mod_perimeterx.git
-RUN cd mod_perimeterx/src && make
+#RUN git clone https://github.com/PerimeterX/mod_perimeterx.git
+#RUN cd mod_perimeterx/src && make
