@@ -11,7 +11,7 @@ all: clean mod
 mod: $(HEADERS) $(SOURCES)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(SOURCES)
 
-debug: $(HEADERS) $(SOURCES);
+debug: $(HEADERS) $(SOURCES)
 	$(CC) $(CFLAGS) $(DBG_CFLAGS) $(LDFLAGS) $(SOURCES)
 
 clean:
