@@ -1,6 +1,7 @@
 #ifndef PX_TYPES_H
 #define PX_TYPES_H
 
+#include <stdbool.h>
 #include <apr_tables.h>
 #include <http_protocol.h>
 
