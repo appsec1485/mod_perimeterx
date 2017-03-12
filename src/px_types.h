@@ -73,9 +73,6 @@ static const char *BLOCK_REASON_STR[] = {
     "s2s_high_score"
 };
 
-// risk cookie
-//
-
 typedef struct risk_cookie_t {
     const char *timestamp;
     long long ts;
@@ -88,16 +85,11 @@ typedef struct risk_cookie_t {
     int b_val;
 } risk_cookie;
 
-
-// risk api response
-
 typedef struct risk_response_t {
     const char* uuid;
     int status;
     int score;
 } risk_response;
-
-// captcha api response
 
 typedef struct captcha_response_t {
     int status;
@@ -105,9 +97,6 @@ typedef struct captcha_response_t {
     const char *vid;
     const char *cid;
 } captcha_response;
-
-
-// handled request context
 
 typedef struct request_context_t {
     const char *px_cookie;

@@ -2,7 +2,6 @@
  * PerimeterX Apache mod
  */
 #include <stdio.h>
-#include <string.h>
 #include <stdbool.h>
 
 #include <jansson.h>
@@ -43,8 +42,6 @@ static const char *ACTIVITIES_API = "/api/v1/collector/s2s";
 // constants
 //
 static const char *CAPTCHA_COOKIE = "_pxCaptcha";
-
-static const int TEMP_REDIRECT = 307;
 static const int MAX_CURL_POOL_SIZE = 10000;
 
 static const char *BLOCKING_PAGE_FMT = "<html lang=\"en\">\n\
@@ -117,7 +114,6 @@ int rprintf_captcha_blocking_page(request_rec *r, const request_context *ctx) {
 }
 
 int px_handle_request(request_rec *r, px_config *conf) {
-
     if (!px_should_verify_request(r, conf)) {
         return OK;
     }
@@ -146,7 +142,7 @@ int px_handle_request(request_rec *r, px_config *conf) {
                     redirect_url = apr_pstrcat(r->pool, conf->block_page_url, "?url=", r->uri, "&uuid=", ctx->uuid, "&vid=", ctx->vid,  NULL);
                 }
                 apr_table_set(r->headers_out, "Location", redirect_url);
-                return TEMP_REDIRECT;
+                return HTTP_TEMPORARY_REDIRECT;
             }
             if (conf->captcha_enabled) {
                 rprintf_captcha_blocking_page(r, ctx);

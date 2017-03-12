@@ -62,7 +62,7 @@ static char *post_request(const char *url, const char *payload, const char *auth
     curl_slist_free_all(headers);
     if (res == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
-        if (status_code == 200) {
+        if (status_code == HTTP_OK) {
             curl_pool_put(curl_pool, curl);
             return response.data;
         }

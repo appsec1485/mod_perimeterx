@@ -7,7 +7,6 @@
 #include <openssl/sha.h>
 #include <openssl/hmac.h>
 
-//TODO: remove from here
 #include <jansson.h>
 #include <apr_tables.h>
 #include <apr_strings.h>
