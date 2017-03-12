@@ -11,7 +11,6 @@
 #include "px_utils.h"
 #include "curl_pool.h"
 
-
 #define INFO(server_rec, ...) \
     ap_log_error(APLOG_MARK, APLOG_DEBUG | APLOG_NOERRNO, 0, server_rec, "[mod_perimeterx]: " __VA_ARGS__)
 
@@ -198,6 +197,60 @@ static void post_verification(request_context *ctx, px_config *conf, bool reques
     }
 }
 
+bool px_should_verify_request(request_rec *r, px_config *conf) {
+    if (!conf->module_enabled) {
+        return false;
+    }
+
+    if (conf->block_page_url && strcmp(r->uri, conf->block_page_url) == 0) {
+        return false;
+    }
+
+    const char *file_ending = strrchr(r->uri, '.');
+    if (file_ending) {
+        const apr_array_header_t *file_exts = conf->custom_file_ext_whitelist;
+        if (file_exts->nelts > 0) {
+            // using custom file extension whitelist
+            for (int i = 0; i < file_exts->nelts; i++) {
+                const char *file_ext = APR_ARRAY_IDX(file_exts, i, const char*);
+                if (strcmp(file_ending, file_ext) == 0) {
+                    return false;
+                }
+            }
+        } else {
+            // using default whitelist
+            for (int i = 0; i < sizeof(FILE_EXT_WHITELIST)/sizeof(*FILE_EXT_WHITELIST); i++ ) {
+                if (strcmp(file_ending, FILE_EXT_WHITELIST[i]) == 0) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // checks if request is filtered using PXWhitelistRoutes
+    const apr_array_header_t *routes = conf->routes_whitelist;
+    for (int i = 0; i < routes->nelts; i++) {
+        const char *route = APR_ARRAY_IDX(routes, i, const char*);
+        if (strncmp(route, r->parsed_uri.path, strlen(route)) == 0) {
+            return false;
+        }
+    }
+
+    // checks if request is filtered using PXWhitelistUserAgents
+    const char *r_useragent = apr_table_get(r->headers_in, "User-Agent");
+    if (r_useragent) {
+        const apr_array_header_t *useragents = conf->useragents_whitelist;
+        for (int i = 0; i < useragents->nelts; i++) {
+            const char *useragent = APR_ARRAY_IDX(useragents, i, const char*);
+            if (strcmp(useragent, r_useragent) == 0) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 risk_response* risk_api_get(const request_context *ctx, const px_config *conf) {
     char *risk_payload = create_risk_payload(ctx, conf);
     if (!risk_payload) {
@@ -373,59 +426,3 @@ handle_response:
     post_verification(ctx, conf, request_valid);
     return request_valid;
 }
-
-
-bool px_should_verify_request(request_rec *r, px_config *conf) {
-    if (!conf->module_enabled) {
-        return false;
-    }
-
-    if (conf->block_page_url && strcmp(r->uri, conf->block_page_url) == 0) {
-        return false;
-    }
-
-    const char *file_ending = strrchr(r->uri, '.');
-    if (file_ending) {
-        const apr_array_header_t *file_exts = conf->custom_file_ext_whitelist;
-        if (file_exts->nelts > 0) {
-            // using custom file extension whitelist
-            for (int i = 0; i < file_exts->nelts; i++) {
-                const char *file_ext = APR_ARRAY_IDX(file_exts, i, const char*);
-                if (strcmp(file_ending, file_ext) == 0) {
-                    return false;
-                }
-            }
-        } else {
-            // using default whitelist
-            for (int i = 0; i < sizeof(FILE_EXT_WHITELIST)/sizeof(*FILE_EXT_WHITELIST); i++ ) {
-                if (strcmp(file_ending, FILE_EXT_WHITELIST[i]) == 0) {
-                    return false;
-                }
-            }
-        }
-    }
-
-    // checks if request is filtered using PXWhitelistRoutes
-    const apr_array_header_t *routes = conf->routes_whitelist;
-    for (int i = 0; i < routes->nelts; i++) {
-        const char *route = APR_ARRAY_IDX(routes, i, const char*);
-        if (strncmp(route, r->parsed_uri.path, strlen(route)) == 0) {
-            return false;
-        }
-    }
-
-    // checks if request is filtered using PXWhitelistUserAgents
-    const char *r_useragent = apr_table_get(r->headers_in, "User-Agent");
-    if (r_useragent) {
-        const apr_array_header_t *useragents = conf->useragents_whitelist;
-        for (int i = 0; i < useragents->nelts; i++) {
-            const char *useragent = APR_ARRAY_IDX(useragents, i, const char*);
-            if (strcmp(useragent, r_useragent) == 0) {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-

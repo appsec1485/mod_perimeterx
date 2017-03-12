@@ -4,12 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include <arpa/inet.h>
 
 #include <jansson.h>
-
 #include <curl/curl.h>
-
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
@@ -24,10 +21,6 @@
 #include "apr_escape.h"
 
 #include "px_types.h"
-#include "curl_pool.h"
-#include "px_cookie.h"
-#include "px_json.h"
-#include "px_utils.h"
 #include "px_enforcer.h"
 
 module AP_MODULE_DECLARE_DATA perimeterx_module;
@@ -111,7 +104,6 @@ static const char *CAPTCHA_BLOCKING_PAGE_FMT  = "<html lang=\"en\">\n \
                                                  </body>\n \
                                                  </html>";
 
-
 static const char *ERROR_CONFIG_MISSING = "mod_perimeterx: config structure not allocated";
 static const char* MAX_CURL_POOL_SIZE_EXCEEDED = "mod_perimeterx: CurlPoolSize can not exceed 10000";
 
@@ -123,7 +115,6 @@ int rprintf_captcha_blocking_page(request_rec *r, const request_context *ctx) {
     const char *vid = ctx->vid ? ctx->vid : "";
     return ap_rprintf(r, CAPTCHA_BLOCKING_PAGE_FMT, vid, ctx->uuid, ctx->uuid);
 }
-
 
 int px_handle_request(request_rec *r, px_config *conf) {
 
@@ -389,10 +380,6 @@ static const char *add_host_to_list(cmd_parms *cmd, void *config, const char *do
 static int px_hook_post_request(request_rec *r) {
     px_config *conf = ap_get_module_config(r->server->module_config, &perimeterx_module);
     return px_handle_request(r, conf);
-}
-
-apr_status_t kill_curl_pool(void *data) {
-    curl_pool_destroy((curl_pool*)data);
 }
 
 static void *create_config(apr_pool_t *p) {
