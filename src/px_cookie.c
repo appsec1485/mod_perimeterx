@@ -8,9 +8,9 @@
 #include <openssl/hmac.h>
 
 #include <jansson.h>
+
 #include <apr_tables.h>
 #include <apr_strings.h>
-
 #include <http_log.h>
 
 #define INFO(server_rec, ...) \
@@ -21,6 +21,9 @@
 
 static const int ITERATIONS_UPPER_BOUND = 10000;
 static const int ITERATIONS_LOWER_BOUND = 0;
+static const int IV_LEN = 16;
+static const int KEY_LEN = 32;
+static const int HASH_LEN = 65;
 
 int decode_base64(const char *s, unsigned char **o, int *len, apr_pool_t *p) {
     if (!s) {
@@ -86,7 +89,7 @@ risk_cookie *parse_risk_cookie(const char *raw_cookie, request_context *ctx) {
     return cookie;
 }
 
-void digest_cookie(const risk_cookie *cookie, request_context *ctx, const char *cookie_key, const char **signing_fields, int sign_fields_size, char buffer[65]) {
+void digest_cookie(const risk_cookie *cookie, request_context *ctx, const char *cookie_key, const char **signing_fields, int sign_fields_size, char *buffer, int buffer_len) {
     unsigned char hash[32];
 
     HMAC_CTX hmac;
@@ -114,11 +117,11 @@ void digest_cookie(const risk_cookie *cookie, request_context *ctx, const char *
         HMAC_Update(&hmac, signing_fields[i], strlen(signing_fields[i]));
     }
 
-    int len = 32;
+    int len = buffer_len / 2;
     HMAC_Final(&hmac, hash, &len);
     HMAC_CTX_cleanup(&hmac);
 
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < len; i++) {
         sprintf(buffer + (i * 2), "%02x", hash[i]);
     }
 }
@@ -150,7 +153,6 @@ risk_cookie *decode_cookie(const char *px_cookie, const char *cookie_key, reques
         return NULL;
     }
 
-
     // decode payload
     unsigned char *payload;
     int payload_len;
@@ -162,17 +164,15 @@ risk_cookie *decode_cookie(const char *px_cookie, const char *cookie_key, reques
     decode_base64(encoded_salt, &salt, &salt_len, r_ctx->r->pool);
 
     // pbkdf2
-    const int iv_len = 16;
-    const int key_len = 32;
-    unsigned char *pbdk2_out = (unsigned char*)apr_palloc(r_ctx->r->pool, iv_len + key_len);
-    if (PKCS5_PBKDF2_HMAC(cookie_key, strlen(cookie_key), salt, salt_len, iterations, EVP_sha256(),  iv_len + key_len, pbdk2_out) == 0) {
+    unsigned char *pbdk2_out = (unsigned char*)apr_palloc(r_ctx->r->pool, IV_LEN + KEY_LEN);
+    if (PKCS5_PBKDF2_HMAC(cookie_key, strlen(cookie_key), salt, salt_len, iterations, EVP_sha256(),  IV_LEN + KEY_LEN, pbdk2_out) == 0) {
         ERROR(r_ctx->r->server,"PKCS5_PBKDF2_HMAC_SHA256 failed");
         return NULL;
     }
-    const unsigned char key[32];
+    const unsigned char key[KEY_LEN];
     memcpy((void*)key, pbdk2_out, sizeof(key));
 
-    const unsigned char iv[16];
+    const unsigned char iv[IV_LEN];
     memcpy((void*)iv, pbdk2_out+sizeof(key), sizeof(iv));
 
     // decrypt aes-256-cbc
@@ -209,7 +209,6 @@ risk_cookie *decode_cookie(const char *px_cookie, const char *cookie_key, reques
     return c;
 }
 
-
 validation_result_t validate_cookie(const risk_cookie *cookie, request_context *ctx, const char *cookie_key) {
     if (cookie == NULL) {
         INFO(ctx->r->server, "validate_cookie: NO COOKIE");
@@ -229,9 +228,9 @@ validation_result_t validate_cookie(const risk_cookie *cookie, request_context *
         return EXPIRED;
     }
 
-    char signature[65];
+    char signature[HASH_LEN];
     const char *signing_fields[] = { ctx->useragent } ;
-    digest_cookie(cookie, ctx, cookie_key, signing_fields, sizeof(signing_fields)/sizeof(*signing_fields), signature);
+    digest_cookie(cookie, ctx, cookie_key, signing_fields, sizeof(signing_fields)/sizeof(*signing_fields), signature, HASH_LEN);
 
     if (memcmp(signature, cookie->hash, 64) != 0) {
         INFO(ctx->r->server, "validate_cookie: SIGNATURE INVALID");
