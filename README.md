@@ -32,7 +32,9 @@ You can install dependencies using the Linux package manager (```yum``` / ```deb
 ```shell
 $ sudo apt-get install libjansson-dev
 $ sudo apt-get install libcurl4-openssl-dev
+$ sudo apt-get install libssl-dev
 $ sudo apt-get install apache2-dev 
+$ sudo apt-get install pkg-config
 ```
 
 <a name="installation"></a>Installation
