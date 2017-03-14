@@ -27,8 +27,6 @@ apt-get install cpanminus
 
     git clone https://github.com/PerimeterX/mod_perimeterx.git
     cd mod_perimeterx
-    git submodule update --init --recursive
-    cd ..
 
 #### Apache 2.4
 
