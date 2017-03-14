@@ -123,7 +123,6 @@ char *create_risk_payload(const request_context *ctx, const px_config *conf) {
         json_object_set_new(j_risk, "uuid", json_string(ctx->uuid));
     }
 
-    // dump as string
     char *request_str = json_dumps(j_risk, JSON_COMPACT);
     json_decref(j_risk);
     return request_str;
