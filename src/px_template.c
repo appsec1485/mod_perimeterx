@@ -6,10 +6,9 @@
 const char *visible = "visible";
 const char *hidden = "hidden";
 
-int render_template(const char *tpl, char **html, const request_context ctx, const px_config conf) {
+int render_template(const char *tpl, char **html, const request_context *ctx, const px_config *conf, size_t *size) {
   json_object *props = json_object_new_object();
   get_props(props, conf, ctx);
-  size_t size;
   int res = mustach_json_c(tpl, props, html, &size);
   json_object_put(props);
   return res;

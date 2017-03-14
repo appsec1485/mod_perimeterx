@@ -3,6 +3,6 @@
 
 #include "px_types.h"
 
-const char *render_template(const char *tpl_type, const request_context ctx, const px_config conf);
+int render_template(const char *tpl, char **html, const request_context *ctx, const px_config *conf, size_t *size);
 
 #endif

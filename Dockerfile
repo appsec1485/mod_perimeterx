@@ -11,7 +11,9 @@ RUN apt-get install -y \
         vim \
         git \
         pkg-config \
-        silversearcher-ag
+        silversearcher-ag \
+        libjson0 \
+        libjson0-dev
 
 WORKDIR tmp
 RUN git clone https://github.com/PerimeterX/mod_perimeterx.git
