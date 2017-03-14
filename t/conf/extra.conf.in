@@ -30,12 +30,12 @@ LoadModule perimeterx_module /usr/lib/apache2/modules/mod_perimeterx.so
     PXEnabled on
     AuthToken ${AUTH_TOKEN}
     CookieKey perimeterx
-    AppId
+    AppId ${APP_ID}
     BlockingScore 50
     Captcha Off
     IPHeader MyRealIP1 MyRealRealIP
     SensitiveRoutes /sensitive_route
     PXWhitelistRoutes /server-status
     PXWhitelistUserAgents whitelisted-useragent
-    #EnableBlockingByHostname
+    BlockPageURL /block.html
 </IfModule>
