@@ -23,8 +23,6 @@ RUN apt-get update && apt-get install -y \
     libapache2-mod-perl2 \
     cpanminus
 
-#apt-get clean
-
 WORKDIR /home/r
 
 RUN cpanm Apache::Test Crypt::KeyDerivation

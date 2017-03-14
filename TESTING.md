@@ -30,9 +30,7 @@ apt-get install cpanminus
     git submodule update --init --recursive
     cd ..
 
-### Apache 2
-
-#### 2.4
+#### Apache 2.4
 
     sudo apt-get install --assume-yes apache2-mpm-prefork apache2-utils apache2-dev
 
