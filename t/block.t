@@ -15,6 +15,6 @@ print $get_res->code;
 ok $get_res->code == 403;
 
 # POST
-my $post_res = POST $url, 'User-Agent' => 'PahntomJS';
+my $post_res = POST $url, 'MyRealIP' => '1.2.3.4', 'User-Agent' => 'PahntomJS';
 print $post_res->code;
 ok $post_res->code == 403;

@@ -9,7 +9,6 @@ plan tests => 1;
 
 my $cookie = expired_cookie;
 
-my $res = GET '/index.html', 'real-ip' => '1.2.3.4', 'Cookie' => $cookie;
-print $res->header_out('X-PX-SCORE');
+my $res = GET '/index.html', 'MyRealIP1' => '1.2.3.4', 'Cookie' => $cookie;
 
 ok $res->code == 200
