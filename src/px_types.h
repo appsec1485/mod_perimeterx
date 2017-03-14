@@ -49,7 +49,8 @@ typedef enum s2s_call_reason_t {
     EXPIRED_COOKIE,
     COOKIE_DECRYPTION_FAILED,
     COOKIE_VALIDATION_FAILED,
-    SENSITIVE_ROUTE
+    SENSITIVE_ROUTE,
+    CAPTCHA_FAILED
 } s2s_call_reason_t;
 
 static const char *S2S_CALL_REASON_STR[] = {
@@ -58,7 +59,8 @@ static const char *S2S_CALL_REASON_STR[] = {
     "cookie_expired",
     "cookie_decryption_failed",
     "cookie_validation_failed",
-    "sensitive_route"
+    "sensitive_route",
+    "captcha_failed"
 };
 
 typedef enum {

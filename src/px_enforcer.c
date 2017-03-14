@@ -366,6 +366,7 @@ bool px_verify_request(request_context *ctx, px_config *conf) {
             return request_valid;
         } else {
             INFO(ctx->r->server, "Failed to verify px captcha, creating risk_api call");
+            ctx->call_reason = CAPTCHA_FAILED;
             risk_response = risk_api_get(ctx, conf);
             goto handle_response;
         }
