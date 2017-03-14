@@ -1,4 +1,5 @@
 use strict;
+
 use warnings FATAL => 'all';
 
 use Apache::Test;
@@ -11,10 +12,8 @@ plan tests => 2;
 
 # GET
 my $get_res = GET $url, 'User-Agent' => 'PhantomJS';
-print $get_res->code;
 ok $get_res->code == 403;
 
 # POST
 my $post_res = POST $url, 'MyRealIP' => '1.2.3.4', 'User-Agent' => 'PahntomJS';
-print $post_res->code;
 ok $post_res->code == 403;
