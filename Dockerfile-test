@@ -4,9 +4,9 @@ MAINTAINER aviad@perimeterx.com
 
 ADD *.sh /home/r/
 
-RUN bash /home/r/entry.sh
+RUN bash /home/r/docker-test-entry.sh
 
-RUN apt-get clean && apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y \
     apache2 \
     apache2-dev \
     wget \
@@ -23,15 +23,17 @@ RUN apt-get clean && apt-get update && apt-get install -y \
     libapache2-mod-perl2 \
     cpanminus
 
+#apt-get clean
+
 WORKDIR /home/r
 
 RUN cpanm Apache::Test Crypt::KeyDerivation
-
 
 RUN git clone https://github.com/PerimeterX/mod_perimeterx.git && cd ./mod_perimeterx && git checkout integration_tests
 
 RUN cd mod_perimeterx && perl Makefile.PL && make && make install
 RUN cd mod_perimeterx/src && make debug
 
-CMD ["su", "-m", "r" , "-c"  , "bash /home/r/run-test.sh"]
+CMD ["su", "-m", "r" , "-c"  , "bash /home/r/t/TEST"]
+#CMD ["su", "-m", "r" , "-c"  , "bash /home/r/run-test.sh"]
 #CMD ["bash"]

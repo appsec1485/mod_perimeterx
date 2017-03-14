@@ -1,4 +1,3 @@
 #!/bin/bash
 
-#echo hello
-./t/TEST -v
+/home/r/mod_perimeterx/t/TEST -v
