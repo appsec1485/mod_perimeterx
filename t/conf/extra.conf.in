@@ -31,7 +31,7 @@ LoadModule perimeterx_module /usr/lib/apache2/modules/mod_perimeterx.so
     AuthToken ${AUTH_TOKEN}
     CookieKey perimeterx
     AppId ${APP_ID}
-    BlockingScore 50
+    BlockingScore 40
     Captcha Off
     IPHeader MyRealIP1 MyRealRealIP
     SensitiveRoutes /sensitive_route
