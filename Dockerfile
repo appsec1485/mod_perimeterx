@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:15.04
 
 RUN apt-get update
 RUN apt-get install -y \
@@ -16,5 +16,7 @@ RUN apt-get install -y \
         libjson0-dev
 
 WORKDIR tmp
-RUN git clone https://github.com/PerimeterX/mod_perimeterx.git
-RUN cd mod_perimeterx && make
+#RUN git clone https://github.com/PerimeterX/mod_perimeterx.git
+#RUN cd mod_perimeterx && make
+
+CMD ["bash"]
