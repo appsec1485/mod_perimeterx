@@ -324,6 +324,33 @@ static const char *add_host_to_list(cmd_parms *cmd, void *config, const char *do
     return NULL;
 }
 
+static const char *set_js_ref(cmd_parms *cmd, void *config, const char *js_ref){
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    conf->js_ref = js_ref;
+    return NULL;
+}
+
+static const char *set_css_ref(cmd_parms *cmd, void *config, const char *css_ref){
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    conf->css_ref = css_ref;
+    return NULL;
+}
+
+static const char *set_custom_logo(cmd_parms *cmd, void *config, const char *custom_logo){
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    conf->custom_logo = custom_logo;
+    return NULL;
+}
+
 static int px_hook_post_request(request_rec *r) {
     px_config *conf = ap_get_module_config(r->server->module_config, &perimeterx_module);
     return px_handle_request(r, conf);
@@ -344,6 +371,9 @@ static void *create_config(apr_pool_t *p) {
         conf->captcha_api_url = apr_pstrcat(p, conf->base_url, CAPTCHA_API, NULL);
         conf->activities_api_url = apr_pstrcat(p, conf->base_url, ACTIVITIES_API, NULL);
         conf->auth_token = "";
+        conf->js_ref = NULL;
+        conf->css_ref = NULL;
+        conf->custom_logo = NULL;
         conf->routes_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->useragents_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->custom_file_ext_whitelist = apr_array_make(p, 0, sizeof(char*));
@@ -383,6 +413,21 @@ static const command_rec px_directives[] = {
             NULL,
             OR_ALL,
             "Risk API auth token"),
+    AP_INIT_TAKE1("CustomLogo",
+            set_custom_logo,
+            NULL,
+            OR_ALL,
+            "Set custom logo on block page"),
+    AP_INIT_TAKE1("CSSRef",
+            set_css_ref,
+            NULL,
+            OR_ALL,
+            "Set custom css on block page"),
+    AP_INIT_TAKE1("JSRef",
+            set_js_ref,
+            NULL,
+            OR_ALL,
+            "Set custom javascript on block page"),
     AP_INIT_TAKE1("BlockingScore",
             set_blocking_score,
             NULL,
