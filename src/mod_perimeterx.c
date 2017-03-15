@@ -20,6 +20,7 @@
 #include "apr_escape.h"
 
 #include "px_types.h"
+#include "px_template.h"
 #include "px_enforcer.h"
 
 module AP_MODULE_DECLARE_DATA perimeterx_module;
@@ -44,73 +45,24 @@ static const char *ACTIVITIES_API = "/api/v1/collector/s2s";
 static const char *CAPTCHA_COOKIE = "_pxCaptcha";
 static const int MAX_CURL_POOL_SIZE = 10000;
 
-static const char *BLOCKING_PAGE_FMT = "<html lang=\"en\">\n\
-            <head>\n\
-            <link type=\"text/css\" rel=\"stylesheet\" media=\"screen, print\" href=\"//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800\">\n\
-            <meta charset=\"UTF-8\">\n\
-            <title>Access to This Page Has Been Blocked</title>\n\
-            <style> p { width: 60%%; margin: 0 auto; font-size: 35px; } body { background-color: #a2a2a2; font-family: \"Open Sans\"; margin: 5%%; } img { width: 180px; } a { color: #2020B1; text-decoration: blink; } a:hover { color: #2b60c6; } </style>\n\
-            </head>\n\
-            <body cz-shortcut-listen=\"true\">\n\
-            <div><img src=\"https://s.perimeterx.net/logo.png\"> </div>\n \
-            <span style=\"color: white; font-size: 34px;\">Access to This Page Has Been Blocked</span> \n\
-            <div style=\"font-size: 24px;color: #000042;\">\n\
-            <br> Access to this page is blocked according to the site security policy.<br> Your browsing behaviour fingerprinting made us think you may be a bot. <br> <br> This may happen as a result of the following: \n\
-            <ul>\n\
-            <li>JavaScript is disabled or not running properly.</li>\n\
-            <li>Your browsing behaviour fingerprinting are not likely to be a regular user.</li>\n\
-            </ul>\n\
-            To read more about the bot defender solution: <a href=\"https://www.perimeterx.com/bot-defender\">https://www.perimeterx.com/bot-defender</a><br> If you think the blocking was done by mistake, contact the site administrator. <br> \n\
-            <br><span style=\"font-size: 20px;\">Block Reference: <span style=\"color: #525151;\">#'%s'</span></span> \n\
-            </div>\n\
-            </body>\n\
-            </html>";
-
-static const char *CAPTCHA_BLOCKING_PAGE_FMT  = "<html lang=\"en\">\n \
-                                                 <head>\n \
-                                                 <link type=\"text/css\" rel=\"stylesheet\" media=\"screen, print\" href=\"//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800\">\n\
-                                                 <meta charset=\"UTF-8\">\n \
-                                                 <title>Access to This Page Has Been Blocked</title>\n \
-                                                 <style> p { width: 60%%; margin: 0 auto; font-size: 35px; } body { background-color: #a2a2a2; font-family: \"Open Sans\"; margin: 5%%; } img { width: 180px; } a { color: #2020B1; text-decoration: blink; } a:hover { color: #2b60c6; } </style>\n \
-                                                 <script src=\"https://www.google.com/recaptcha/api.js\"></script> \
-                                                 <script> \
-                                                 window.px_vid = '%s';\n \
-                                                 window.px_uuid = '%s';\n \
-                                                 function handleCaptcha(response) { \n \
-                                                     var name = '_pxCaptcha';\n \
-                                                         var expiryUtc = new Date(Date.now() + 1000 * 10).toUTCString();\n \
-                                                         var cookieParts = [name, '=', response + ':' + window.px_vid + ':' + window.px_uuid, '; expires=', expiryUtc, '; path=/'];\n \
-                                                         document.cookie = cookieParts.join('');\n \
-                                                         location.reload();\n \
-                                                 }\n \
-                                                 </script> \n \
-                                                 </head>\n \
-                                                 <body cz-shortcut-listen=\"true\">\n \
-                                                 <div><img src=\"https://s.perimeterx.net/logo.png\"> </div>\n \
-                                                 <span style=\"color: white; font-size: 34px;\">Access to This Page Has Been Blocked</span> \n \
-                                                 <div style=\"font-size: 24px;color: #000042;\">\n \
-                                                 <br> Access to this page is blocked according to the site security policy.<br> Your browsing behaviour fingerprinting made us think you may be a bot. <br> <br> This may happen as a result of the following: \n \
-                                                 <ul>\n \
-                                                 <li>JavaScript is disabled or not running properly.</li>\n \
-                                                 <li>Your browsing behaviour fingerprinting are not likely to be a regular user.</li>\n \
-                                                 </ul>\n \
-                                                 To read more about the bot defender solution: <a href=\"https://www.perimeterx.com/bot-defender\">https://www.perimeterx.com/bot-defender</a><br> If you think the blocking was done by mistake, contact the site administrator. <br> \n \
-                                                 <div class=\"g-recaptcha\" data-sitekey=\"6Lcj-R8TAAAAABs3FrRPuQhLMbp5QrHsHufzLf7b\" data-callback=\"handleCaptcha\" data-theme=\"dark\"></div>\n \
-                                                 <br><span style=\"font-size: 20px;\">Block Reference: <span style=\"color: #525151;\">#' %s '</span></span> \n \
-                                                 </div>\n \
-                                                 </body>\n \
-                                                 </html>";
-
 static const char *ERROR_CONFIG_MISSING = "mod_perimeterx: config structure not allocated";
 static const char* MAX_CURL_POOL_SIZE_EXCEEDED = "mod_perimeterx: CurlPoolSize can not exceed 10000";
 
-int rprintf_blocking_page(request_rec *r, const request_context *ctx) {
-    return ap_rprintf(r, BLOCKING_PAGE_FMT, ctx->uuid);
-}
+static const char *block_tpl = "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> <title>Access to this page has been denied.</title> <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300\" rel=\"stylesheet\"> <style> html,body{ margin: 0; padding: 0; font-family: 'Open Sans', sans-serif; color: #000; } a{ color: #c5c5c5; text-decoration: none; } .container{ align-items: center; display: flex; flex: 1; justify-content: space-between; flex-direction: column; height: 100%; } .container > div { width: 100%; display: flex; justify-content:center; } .container > div > div { display: flex; width: 80%; } .customer-logo-wrapper{ padding-top: 2rem; flex-grow: 0; background-color: #fff; visibility: {{logoVisibility}}; } .customer-logo{ border-bottom: 1px solid #000; } .customer-logo > img{ padding-bottom: 1rem; max-height: 50px; max-width: auto; } .page-title-wrapper{ flex-grow: 2; } .page-title { flex-direction: column-reverse; } .content-wrapper{ flex-grow: 5; } .content{ flex-direction: column; } .page-footer-wrapper{ align-items: center; flex-grow: 0.2; background-color: #000; color: #c5c5c5; font-size: 70%; } @media (min-width:768px){ html,body{ height: 100%; } } </style> <!-- Custom CSS --> {{# cssRef }} <link rel=\"stylesheet\" type=\"text/css\" href=\"{{cssRef}}\" /> {{/ cssRef }} </head> <body> <section class=\"container\"> <div class=\"customer-logo-wrapper\"> <div class=\"customer-logo\"> <img src=\"{{customLogo}}\" alt=\"Logo\"/> </div> </div> <div class=\"page-title-wrapper\"> <div class=\"page-title\"> <h1>Access to this page has been denied.</h1> </div> </div> <div class=\"content-wrapper\"> <div class=\"content\"> <p> You have been blocked because we believe you are using automation tools to browse the website. </p> <p> Please note that Javascript and Cookies must be enabled on your browser to access the website. </p> <p> If you think you have been blocked by mistake, please contact the website administrator with the reference ID below. </p> <p> Reference ID: #{{refId}} </p> </div> </div> <div class=\"page-footer-wrapper\"> <div class=\"page-footer\"> <p> Powered by <a href=\"https://www.perimeterx.com\">PerimeterX</a> , Inc. </p> </div> </div> </section> <!-- Px --> <script> ( function (){ window._pxAppId = '{{appId}}'; var p = document.getElementsByTagName(\"script\")[0], s = document.createElement(\"script\"); s.async = 1; s.src = '//client.perimeterx.net/{{appId}}/main.min.js'; p.parentNode.insertBefore(s, p); } () ); </script> <!-- Custom Script --> {{# jsRef }} <script src=\"{{jsRef}}\"></script> {{/ jsRef }} </body> </html> ";
 
-int rprintf_captcha_blocking_page(request_rec *r, const request_context *ctx) {
-    const char *vid = ctx->vid ? ctx->vid : "";
-    return ap_rprintf(r, CAPTCHA_BLOCKING_PAGE_FMT, vid, ctx->uuid, ctx->uuid);
+static const char *captcha_tpl = "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> <title>Access to this page has been denied.</title> <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300\" rel=\"stylesheet\"> <style> html,body{ margin: 0; padding: 0; font-family: 'Open Sans', sans-serif; color: #000; } a{ color: #c5c5c5; text-decoration: none; } .container{ align-items: center; display: flex; flex: 1; justify-content: space-between; flex-direction: column; height: 100%; } .container > div { width: 100%; display: flex; justify-content:center; } .container > div > div { display: flex; width: 80%; } .customer-logo-wrapper{ padding-top: 2rem; flex-grow: 0; background-color: #fff; visibility: {{logoVisibility}}; } .customer-logo{ border-bottom: 1px solid #000; } .customer-logo > img{ padding-bottom: 1rem; max-height: 50px; max-width: auto; } .page-title-wrapper{ flex-grow: 2; } .page-title { flex-direction: column-reverse; } .content-wrapper{ flex-grow: 5; } .content{ flex-direction: column; } .page-footer-wrapper{ align-items: center; flex-grow: 0.2; background-color: #000; color: #c5c5c5; font-size: 70%; } @media (min-width:768px){ html,body{ height: 100%; } } </style> <!-- Custom CSS --> {{#cssRef}} <link rel=\"stylesheet\" type=\"text/css\" href=\"{{cssRef}}\" /> {{/cssRef}} <script src=\"https://www.google.com/recaptcha/api.js\" async defer></script> </head> <body> <section class=\"container\"> <div class=\"customer-logo-wrapper\"> <div class=\"customer-logo\"> <img src=\"{{customLogo}}\" alt=\"Logo\"/> </div> </div> <div class=\"page-title-wrapper\"> <div class=\"page-title\"> <h1>Please verify you are a human</h1> </div> </div> <div class=\"content-wrapper\"> <div class=\"content\"> <p> Please click \"I am not a robot\" to continue </p> <div class=\"g-recaptcha\" data-sitekey=\"6Lcj-R8TAAAAABs3FrRPuQhLMbp5QrHsHufzLf7b\" data-callback=\"handleCaptcha\" data-theme=\"dark\"> </div> <p> Access to this page has been denied because we believe you are using automation tools to browse the website. </p> <p> This may happen as a result of the following: </p> <ul> <li> Javascript is disabled or blocked by an extension (ad blockers for example) </li> <li> Your browser does not support cookies </li> </ul> <p> Please make sure that Javascript and cookies are enabled on your browser and that you are not blocking them from loading. </p> <p> Reference ID: #{{refId}} </p> </div> </div> <div class=\"page-footer-wrapper\"> <div class=\"page-footer\"> <p> Powered by <a href=\"https://www.perimeterx.com\">PerimeterX</a> , Inc. </p> </div> </div> </section> <!-- Px --> <script> ( function (){ window._pxAppId = '{{appId}}'; var p = document.getElementsByTagName(\"script\")[0], s = document.createElement(\"script\"); s.async = 1; s.src = '//client.perimeterx.net/{{appId}}/main.min.js'; p.parentNode.insertBefore(s, p); } () ); </script> <!-- Captcha --> <script> window.px_vid = '{{vid}}'; function handleCaptcha(response){ var vid = '{{vid}}'; var uuid = '{{uuid}}'; var name = \"_pxCaptcha\"; var expiryUtc = new Date(Date.now()+1000*10).toUTCString(); var cookieParts = [ name, \"=\", response+\":\"+vid+\":\"+uuid, \"; expires=\", expiryUtc, \"; path=/\" ]; document.cookie = cookieParts.join(\"\"); location.reload(); } </script> <!-- Custom Script --> {{#jsRef}} <script src=\"{{jsRef}}\"></script> {{/jsRef}} </body> </html>";
+
+int render_page(request_rec *r, const request_context *ctx, const px_config *conf) {
+  int ret_val;
+  char *html = NULL;
+  const char *tpl = conf->captcha_enabled ? captcha_tpl : block_tpl;
+  size_t size;
+  int res = render_template(tpl, &html, ctx, conf, &size);
+  if (res == 0) {
+    ret_val = ap_rwrite(html, size, r);
+  }
+  free(html);
+  return res;
 }
 
 int px_handle_request(request_rec *r, px_config *conf) {
@@ -148,16 +100,15 @@ int px_handle_request(request_rec *r, px_config *conf) {
                 apr_table_set(r->headers_out, "Location", redirect_url);
                 return HTTP_TEMPORARY_REDIRECT;
             }
-            if (conf->captcha_enabled) {
-                rprintf_captcha_blocking_page(r, ctx);
-				r->status = HTTP_FORBIDDEN;
+
+            if (render_page(r, ctx, conf) != 0) {
+              ERROR(r->server, "Could not create block page with template, passing request");
             } else {
-                rprintf_blocking_page(r, ctx);
-				r->status = HTTP_FORBIDDEN;
+              r->status = HTTP_FORBIDDEN;
+              ap_set_content_type(r, "text/html");
+              INFO(r->server, "px_handle_request: request blocked. captcha (%d)", conf->captcha_enabled);
+              return DONE;
             }
-            ap_set_content_type(r, "text/html");
-            INFO(r->server, "px_handle_request: request blocked. captcha (%d)", conf->captcha_enabled);
-            return DONE;
         }
     }
     INFO(r->server, "px_handle_request: request passed");
@@ -377,6 +328,33 @@ static const char *add_host_to_list(cmd_parms *cmd, void *config, const char *do
     return NULL;
 }
 
+static const char *set_js_ref(cmd_parms *cmd, void *config, const char *js_ref){
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    conf->js_ref = js_ref;
+    return NULL;
+}
+
+static const char *set_css_ref(cmd_parms *cmd, void *config, const char *css_ref){
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    conf->css_ref = css_ref;
+    return NULL;
+}
+
+static const char *set_custom_logo(cmd_parms *cmd, void *config, const char *custom_logo){
+    px_config *conf = get_config(cmd, config);
+    if (!conf) {
+        return ERROR_CONFIG_MISSING;
+    }
+    conf->custom_logo = custom_logo;
+    return NULL;
+}
+
 static int px_hook_post_request(request_rec *r) {
     px_config *conf = ap_get_module_config(r->server->module_config, &perimeterx_module);
     return px_handle_request(r, conf);
@@ -397,6 +375,9 @@ static void *create_config(apr_pool_t *p) {
         conf->captcha_api_url = apr_pstrcat(p, conf->base_url, CAPTCHA_API, NULL);
         conf->activities_api_url = apr_pstrcat(p, conf->base_url, ACTIVITIES_API, NULL);
         conf->auth_token = "";
+        conf->js_ref = NULL;
+        conf->css_ref = NULL;
+        conf->custom_logo = NULL;
         conf->routes_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->useragents_whitelist = apr_array_make(p, 0, sizeof(char*));
         conf->custom_file_ext_whitelist = apr_array_make(p, 0, sizeof(char*));
@@ -436,6 +417,21 @@ static const command_rec px_directives[] = {
             NULL,
             OR_ALL,
             "Risk API auth token"),
+    AP_INIT_TAKE1("CustomLogo",
+            set_custom_logo,
+            NULL,
+            OR_ALL,
+            "Set custom logo on block page"),
+    AP_INIT_TAKE1("CSSRef",
+            set_css_ref,
+            NULL,
+            OR_ALL,
+            "Set custom css on block page"),
+    AP_INIT_TAKE1("JSRef",
+            set_js_ref,
+            NULL,
+            OR_ALL,
+            "Set custom javascript on block page"),
     AP_INIT_TAKE1("BlockingScore",
             set_blocking_score,
             NULL,
