@@ -9,7 +9,7 @@ docker build -t mod_perimeterx-test -f Dockerfile-test .
 ### Run tests on Docker
 
 ```bash
-docker run mod_perimeterx-test -e APP_ID=${APP_ID} AUTH_TOKEN=${AUTH_TOKEN}
+docker run -e APP_ID=${APP_ID} -e AUTH_TOKEN=${AUTH_TOKEN} mod_perimeterx-test
 ```
 
 Replace `${APP_ID}` and `${AUTH_TOKEN}` with application id and it's auth token:
