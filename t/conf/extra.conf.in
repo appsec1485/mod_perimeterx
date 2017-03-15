@@ -1,5 +1,3 @@
-# vi: set ft=apache
-#
 # where to find mod_perimeterx and configuration
 #ServerRoot "/etc/apache2"
 #ServerName "test-server"
@@ -28,9 +26,9 @@ LoadModule perimeterx_module /usr/lib/apache2/modules/mod_perimeterx.so
 
 <IfModule mod_perimeterx.c>
     PXEnabled on
-    AuthToken ${AUTH_TOKEN}
+    AuthToken TOKEN
     CookieKey perimeterx
-    AppId PXg3P9d2ZQ
+    AppId APP_ID
     BlockingScore 30
     Captcha Off
     IPHeader MyRealIP1 MyRealRealIP
