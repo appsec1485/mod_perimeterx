@@ -4,7 +4,7 @@
 
 ### Build Docker
 ```bash
-docker build -t mod_perimeterx-test -t Dockerfile-test .
+docker build -t mod_perimeterx-test -f Dockerfile-test .
 ```
 ### Run tests on Docker
 
