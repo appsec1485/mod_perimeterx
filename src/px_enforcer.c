@@ -17,7 +17,8 @@
 #define ERROR(server_rec, ...) \
     ap_log_error(APLOG_MARK, APLOG_ERR, 0, server_rec, "[mod_perimeterx]:" __VA_ARGS__)
 
-static const char *PX_COOKIE = "_px";
+static const char *PX_COOKIE_V1 = "_px";
+static const char *PX_COOKIE_V3 = "_px3";
 static const char *CAPTCHA_COOKIE = "_pxCaptcha";
 static const char *BLOCKED_ACTIVITY_TYPE = "block";
 static const char *PAGE_REQUESTED_ACTIVITY_TYPE = "page_requested";
@@ -274,38 +275,23 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     const char *px_cookie = NULL;
     const char *px_captcha_cookie = NULL;
     char *captcha_cookie = NULL;
-# if AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4
-    apr_status_t status = ap_cookie_read(r, PX_COOKIE, &px_cookie, 0);
+    apr_status_t status = ap_cookie_read(r, PX_COOKIE_V1, &px_cookie, 0);
+    if (px_cookie) {
+        INFO(r->server, "Got cookie v3: %s", px_cookie);
+        ctx->px_cookie_version = 3;
+    } else {
+        status = ap_cookie_read(r, PX_COOKIE_V3, &px_cookie, 0);
+        if (status == APR_SUCCESS) {
+            INFO(r->server, "Got cookie v1: %s", px_cookie);
+            ctx->px_cookie_version = 1;
+        }
+    }
+
+    /*apr_status_t status = ap_cookie_read(r, PX_COOKIE, &px_cookie, 0);*/
     status = ap_cookie_read(r, CAPTCHA_COOKIE, &px_captcha_cookie, 0);
     if (status == APR_SUCCESS) {
         captcha_cookie = apr_pstrdup(r->pool, px_captcha_cookie);
     }
-
-# else
-    char *cookie = NULL;
-    char *strtok_ctx = NULL;
-
-    char *cookies = apr_pstrdup(r->pool, (char *) apr_table_get(r->headers_in, "Cookie"));
-    if (cookies) {
-        cookie = apr_strtok(cookies, ";", &strtok_ctx);
-
-        while (cookie) {
-            char *val_ctx;
-            //trim leading space
-            if (*cookie == ' ') {
-                cookie ++;
-            }
-            if (strncmp(cookie, CAPTCHA_COOKIE, 10) == 0) {
-                apr_pstrdup(r->pool, apr_strtok(cookie, "=", &val_ctx));
-                captcha_cookie = apr_pstrdup(r->pool, apr_strtok(NULL, "", &val_ctx));
-            } else if (strncmp(cookie, PX_COOKIE, 3) == 0) {
-                apr_strtok(cookie, "=", &val_ctx);
-                px_cookie = apr_pstrdup(r->pool, apr_strtok(NULL, "", &val_ctx));
-            }
-            cookie = apr_strtok(NULL, ";", &strtok_ctx);
-        }
-    }
-#endif
 
     ctx->ip = get_request_ip(r, conf);
     if (!ctx->ip) {
@@ -320,7 +306,7 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     ctx->http_method = r->method;
     ctx->useragent = apr_table_get(r->headers_in, "User-Agent");
     // TODO(barak): fill_url is missing the protocol like http:// or https://
-    ctx->full_url = apr_pstrcat(r->pool, r->hostname, r->unparsed_uri, NULL);
+
     ctx->vid = NULL;
     ctx->px_cookie_orig = NULL;
 
@@ -358,10 +344,12 @@ bool px_verify_request(request_context *ctx, px_config *conf) {
     if (conf->captcha_enabled && ctx->px_captcha) {
         if (verify_captcha(ctx, conf)) {
             // clean users cookie on captcha verification
-            apr_status_t res = ap_cookie_remove2(ctx->r, PX_COOKIE, NULL, ctx->r->headers_out, ctx->r->err_headers_out, NULL);
-            if (res != APR_SUCCESS) {
-                ERROR(ctx->r->server, "could not remove _px from request");
-            }
+            //
+            // TODO: bring back with the right key
+            /*apr_status_t res = ap_cookie_remove2(ctx->r, PX_COOKIE, NULL, ctx->r->headers_out, ctx->r->err_headers_out, NULL);*/
+            /*if (res != APR_SUCCESS) {*/
+                /*ERROR(ctx->r->server, "could not remove _px from request");*/
+            /*}*/
             post_verification(ctx, conf, true);
             return request_valid;
         } else {

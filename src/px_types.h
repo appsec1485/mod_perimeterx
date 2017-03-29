@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <apr_tables.h>
+#include <apr_hash.h>
 #include <http_protocol.h>
 
 #include "curl_pool.h"
@@ -105,6 +106,7 @@ typedef struct captcha_response_t {
 
 typedef struct request_context_t {
     const char *px_cookie;
+    int px_cookie_version;
     const char *px_cookie_decrypted;
     const char *px_captcha;
     const char *ip;
