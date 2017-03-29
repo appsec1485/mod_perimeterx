@@ -306,7 +306,7 @@ request_context* create_context(request_rec *r, const px_config *conf) {
     ctx->http_method = r->method;
     ctx->useragent = apr_table_get(r->headers_in, "User-Agent");
     // TODO(barak): fill_url is missing the protocol like http:// or https://
-
+    ctx->full_url = apr_pstrcat(r->pool, r->hostname, r->unparsed_uri, NULL);
     ctx->vid = NULL;
     ctx->px_cookie_orig = NULL;
 

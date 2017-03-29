@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 #include <apr_tables.h>
-#include <apr_hash.h>
 #include <http_protocol.h>
 
 #include "curl_pool.h"
