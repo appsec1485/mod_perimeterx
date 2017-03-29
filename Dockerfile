@@ -19,7 +19,8 @@ RUN apt-get install -y \
         libgdm-dev \
         cpanminus \
         libjson0 \
-        libjson0-dev
+        libjson0-dev \
+        check
 
 #RUN rm /etc/ld.so.cache && ldconfig
 

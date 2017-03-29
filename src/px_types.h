@@ -79,18 +79,6 @@ static const char *BLOCK_REASON_STR[] = {
     "s2s_high_score"
 };
 
-typedef struct risk_cookie_t {
-    const char *timestamp;
-    long long ts;
-    const char *hash;
-    const char *uuid;
-    const char *vid;
-    const char *a;
-    const char *b;
-    int a_val;
-    int b_val;
-} risk_cookie;
-
 typedef struct risk_response_t {
     const char *uuid;
     int status;
