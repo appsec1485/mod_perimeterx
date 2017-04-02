@@ -1,4 +1,5 @@
 #include "px_cookie.h"
+#include "px_cookie_utils.h"
 
 #include <openssl/conf.h>
 #include <openssl/err.h>
@@ -24,23 +25,6 @@ static const int ITERATIONS_LOWER_BOUND = 0;
 static const int IV_LEN = 16;
 static const int KEY_LEN = 32;
 static const int HASH_LEN = 65;
-
-// TODO: remove when refactor is over
-int decode_base64(const char *s, unsigned char **o, int *len, apr_pool_t *p) {
-    if (!s) {
-        return -1;
-    }
-    int l = strlen(s);
-    *o = (unsigned char*)apr_palloc(p, (l * 3 + 1));
-    BIO *bio = BIO_new_mem_buf((void*)s, -1);
-    BIO *b64 = BIO_new(BIO_f_base64());
-    bio = BIO_push(b64, bio);
-
-    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-    *len = BIO_read(bio, *o, l);
-    BIO_free_all(b64);
-    return 0;
-}
 
 risk_cookie *parse_risk_cookie(const char *raw_cookie, request_context *ctx) {
     json_error_t error;
@@ -88,44 +72,6 @@ risk_cookie *parse_risk_cookie(const char *raw_cookie, request_context *ctx) {
     INFO(ctx->r->server,"cookie data: timestamp %s, vid %s, uuid %s hash %s scores: a %s b %s", cookie->timestamp, cookie->vid, cookie->uuid, cookie->hash, cookie->a, cookie->b);
     json_decref(j_cookie);
     return cookie;
-}
-
-// TODO: remove when refactor is over
-void digest_cookie(const risk_cookie *cookie, request_context *ctx, const char *cookie_key, const char **signing_fields, int sign_fields_size, char *buffer, int buffer_len) {
-    unsigned char hash[32];
-
-    HMAC_CTX hmac;
-    HMAC_CTX_init(&hmac);
-
-    HMAC_Init_ex(&hmac, cookie_key, strlen(cookie_key), EVP_sha256(), NULL);
-
-    if (cookie->timestamp) {
-        HMAC_Update(&hmac, cookie->timestamp, strlen(cookie->timestamp));
-    }
-    if (cookie->a) {
-        HMAC_Update(&hmac, cookie->a, strlen(cookie->a));
-    }
-    if (cookie->b) {
-        HMAC_Update(&hmac, cookie->b, strlen(cookie->b));
-    }
-    if (cookie->uuid) {
-        HMAC_Update(&hmac, cookie->uuid, strlen(cookie->uuid));
-    }
-    if (cookie->vid) {
-        HMAC_Update(&hmac, cookie->vid, strlen(cookie->vid));
-    }
-
-    for (int i = 0; i < sign_fields_size; i++) {
-        HMAC_Update(&hmac, signing_fields[i], strlen(signing_fields[i]));
-    }
-
-    int len = buffer_len / 2;
-    HMAC_Final(&hmac, hash, &len);
-    HMAC_CTX_cleanup(&hmac);
-
-    for (int i = 0; i < len; i++) {
-        sprintf(buffer + (i * 2), "%02x", hash[i]);
-    }
 }
 
 risk_cookie *decode_cookie(const char *px_cookie, const char *cookie_key, request_context *r_ctx) {
@@ -231,8 +177,8 @@ validation_result_t validate_cookie(const risk_cookie *cookie, request_context *
     }
 
     char signature[HASH_LEN];
-    const char *signing_fields[] = { ctx->useragent } ;
-    digest_cookie(cookie, ctx, cookie_key, signing_fields, sizeof(signing_fields)/sizeof(*signing_fields), signature, HASH_LEN);
+    const char *signing_fields[] = { cookie->timestamp, cookie->a, cookie->b, cookie->uuid, cookie->vid, ctx->useragent } ;
+    digest_cookie(cookie_key, signing_fields, sizeof(signing_fields)/sizeof(*signing_fields), signature, HASH_LEN);
 
     if (memcmp(signature, cookie->hash, 64) != 0) {
         INFO(ctx->r->server, "validate_cookie: SIGNATURE INVALID");

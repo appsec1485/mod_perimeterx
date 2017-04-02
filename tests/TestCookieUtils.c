@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <apr_strings.h>
 #include <apr_pools.h>
 
 #include "CuTest.h"
@@ -38,7 +39,7 @@ void TestCookieUtils_ValidBase64Decode(CuTest *cu) {
     apr_pool_create(&p, NULL);
 
     int len;
-    char *payload;
+    unsigned char *payload;
     const char *base64_str = "cGVyaW1ldGVyeA==";
     const char *decoded_str = "perimeterx";
 
@@ -55,7 +56,7 @@ void TestCookieUtils_InvalidBase64Decode(CuTest *cu) {
     apr_pool_create(&p, NULL);
 
     int len;
-    char *payload;
+    unsigned char *payload;
     const char *base64_str = NULL;
     const char *decoded_str = "perimeterx";
 
@@ -73,7 +74,7 @@ CuSuite *CookieUtilsSuiteGet() {
 
     // base64 decode
     SUITE_ADD_TEST(suite, TestCookieUtils_ValidBase64Decode);
-    SUITE_ADD_TEST(suite, TestCookieUtils_InvalidBase64Decode)
+    SUITE_ADD_TEST(suite, TestCookieUtils_InvalidBase64Decode);
 
     return suite;
 }
