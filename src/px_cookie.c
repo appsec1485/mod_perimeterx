@@ -25,6 +25,7 @@ static const int IV_LEN = 16;
 static const int KEY_LEN = 32;
 static const int HASH_LEN = 65;
 
+// TODO: remove when refactor is over
 int decode_base64(const char *s, unsigned char **o, int *len, apr_pool_t *p) {
     if (!s) {
         return -1;
@@ -89,6 +90,7 @@ risk_cookie *parse_risk_cookie(const char *raw_cookie, request_context *ctx) {
     return cookie;
 }
 
+// TODO: remove when refactor is over
 void digest_cookie(const risk_cookie *cookie, request_context *ctx, const char *cookie_key, const char **signing_fields, int sign_fields_size, char *buffer, int buffer_len) {
     unsigned char hash[32];
 
@@ -129,9 +131,9 @@ void digest_cookie(const risk_cookie *cookie, request_context *ctx, const char *
 risk_cookie *decode_cookie(const char *px_cookie, const char *cookie_key, request_context *r_ctx) {
     char *px_cookie_cpy = apr_pstrdup(r_ctx->r->pool, px_cookie);
     // parse cookie
-    char* saveptr;
-    const char* delimieter = ":";
-    const char* encoded_salt = strtok_r(px_cookie_cpy, delimieter, &saveptr);
+    char *saveptr;
+    const char *delimieter = ":";
+    const char *encoded_salt = strtok_r(px_cookie_cpy, delimieter, &saveptr);
     if (encoded_salt == NULL) {
         INFO(r_ctx->r->server, "Stoping cookie decryption: no valid salt in cookie");
         return NULL;
