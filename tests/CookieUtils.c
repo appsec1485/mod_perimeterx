@@ -74,7 +74,6 @@ CuSuite *CookieUtilsSuiteGet() {
     // base64 decode
     SUITE_ADD_TEST(suite, TestCookieUtils_ValidBase64Decode);
     SUITE_ADD_TEST(suite, TestCookieUtils_InvalidBase64Decode)
-    /*SUITE_ADD_TEST(suite, TestCookieUtils_InvalidBase64Decode2);*/
 
     return suite;
 }
